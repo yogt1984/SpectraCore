@@ -39,9 +39,11 @@ void generate_window(float* output, size_t size, WindowType type) {
         case WindowType::Blackman:
             for (size_t i = 0; i < size; ++i) {
                 const float n = static_cast<float>(i);
-                output[i] = 0.42f
+                float val = 0.42f
                           - 0.5f * std::cos(constants::two_pi * n / (N - 1))
                           + 0.08f * std::cos(2.0f * constants::two_pi * n / (N - 1));
+                // Clamp tiny negative values from floating-point precision
+                output[i] = std::max(0.0f, val);
             }
             break;
 
