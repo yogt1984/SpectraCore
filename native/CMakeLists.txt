@@ -53,7 +53,11 @@ target_include_directories(spectra
 
 target_link_libraries(spectra PRIVATE kissfft)
 
-# Export symbols
+# Export symbols - ensure all symbols are visible for shared library
+set_target_properties(spectra PROPERTIES
+    CXX_VISIBILITY_PRESET default
+    VISIBILITY_INLINES_HIDDEN OFF
+)
 target_compile_definitions(spectra PRIVATE SPECTRA_BUILD)
 
 # Platform-specific settings
