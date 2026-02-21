@@ -1,0 +1,25 @@
+{
+  "name": "com.spectracore.dsp",
+  "version": "0.1.0",
+  "displayName": "SpectraCore DSP",
+  "description": "Native C++ DSP library for Unity - MATLAB-equivalent signal processing toolkit",
+  "unity": "2021.3",
+  "unityRelease": "0f1",
+  "documentationUrl": "https://github.com/yogt1984/SpectraCore",
+  "changelogUrl": "https://github.com/yogt1984/SpectraCore/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/yogt1984/SpectraCore/blob/main/LICENSE",
+  "keywords": [
+    "dsp",
+    "signal-processing",
+    "fft",
+    "audio",
+    "filter",
+    "matlab",
+    "native"
+  ],
+  "author": {
+    "name": "SpectraCore",
+    "url": "https://github.com/yogt1984/SpectraCore"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,65 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+.vs/
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Unity
+Library/
+Temp/
+Logs/
+UserSettings/
+*.csproj
+*.sln
+*.pidb
+*.unityproj
+obj/
+
+# Unity plugin binaries (generated)
+unity/Runtime/Plugins/Windows/
+unity/Runtime/Plugins/macOS/
+unity/Runtime/Plugins/Linux/
+unity/Runtime/Plugins/iOS/
+unity/Runtime/Plugins/Android/
+
+# Test coverage
+*.gcov
+*.gcda
+*.gcno
+coverage/
+coverage.info
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies (if using package managers)
+node_modules/
+packages/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*~

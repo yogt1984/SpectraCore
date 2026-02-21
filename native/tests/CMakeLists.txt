@@ -1,0 +1,15 @@
+# SpectraCore Tests
+
+# Unit tests
+spectra_add_test(test_ring_buffer unit/test_ring_buffer.cpp)
+spectra_add_test(test_window_functions unit/test_window_functions.cpp)
+spectra_add_test(test_fft unit/test_fft.cpp)
+spectra_add_test(test_filters unit/test_filters.cpp)
+spectra_add_test(test_correlation unit/test_correlation.cpp)
+spectra_add_test(test_streaming_filter unit/test_streaming_filter.cpp)
+
+# Benchmarks (optional)
+if(SPECTRA_BUILD_BENCHMARKS)
+    add_executable(bench_fft benchmarks/bench_fft.cpp)
+    target_link_libraries(bench_fft PRIVATE spectra)
+endif()

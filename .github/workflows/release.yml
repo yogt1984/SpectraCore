@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  build-all-platforms:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            cmake_args: "-A x64"
+            artifact_name: windows-x64
+
+          - name: macOS Universal
+            os: macos-latest
+            cmake_args: "-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64"
+            artifact_name: macos-universal
+
+          - name: Linux x64
+            os: ubuntu-latest
+            cmake_args: ""
+            artifact_name: linux-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        working-directory: native
+        run: cmake -B build ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} -DSPECTRA_BUILD_TESTS=OFF
+
+      - name: Build
+        working-directory: native
+        run: cmake --build build --config ${{ env.CMAKE_BUILD_TYPE }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spectra-${{ matrix.artifact_name }}
+          path: native/build/lib/*
+
+  build-mobile:
+    name: Build Mobile
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Android ARM64
+        working-directory: native
+        run: |
+          cmake -B build-android-arm64 \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DSPECTRA_BUILD_TESTS=OFF
+          cmake --build build-android-arm64
+
+      - name: Build Android ARMv7
+        working-directory: native
+        run: |
+          cmake -B build-android-armv7 \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=armeabi-v7a \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DSPECTRA_BUILD_TESTS=OFF
+          cmake --build build-android-armv7
+
+      - name: Build iOS
+        working-directory: native
+        run: |
+          cmake -B build-ios \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DSPECTRA_BUILD_TESTS=OFF
+          cmake --build build-ios
+
+      - name: Upload Android ARM64
+        uses: actions/upload-artifact@v4
+        with:
+          name: spectra-android-arm64
+          path: native/build-android-arm64/lib/*
+
+      - name: Upload Android ARMv7
+        uses: actions/upload-artifact@v4
+        with:
+          name: spectra-android-armv7
+          path: native/build-android-armv7/lib/*
+
+      - name: Upload iOS
+        uses: actions/upload-artifact@v4
+        with:
+          name: spectra-ios
+          path: native/build-ios/lib/*
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-all-platforms, build-mobile]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize Unity Package
+        run: |
+          mkdir -p unity-package/Runtime/Plugins
+          cp -r artifacts/spectra-windows-x64/* unity-package/Runtime/Plugins/Windows/x86_64/ || true
+          cp -r artifacts/spectra-macos-universal/* unity-package/Runtime/Plugins/macOS/ || true
+          cp -r artifacts/spectra-linux-x64/* unity-package/Runtime/Plugins/Linux/x86_64/ || true
+          cp -r artifacts/spectra-android-arm64/* unity-package/Runtime/Plugins/Android/libs/arm64-v8a/ || true
+          cp -r artifacts/spectra-android-armv7/* unity-package/Runtime/Plugins/Android/libs/armeabi-v7a/ || true
+          cp -r artifacts/spectra-ios/* unity-package/Runtime/Plugins/iOS/ || true
+          cp -r unity/Runtime/Scripts unity-package/Runtime/
+          cp unity/package.json unity-package/
+          cp unity/Runtime/*.asmdef unity-package/Runtime/
+
+      - name: Create Unity Package Archive
+        run: |
+          cd unity-package
+          zip -r ../spectra-unity-${{ github.ref_name }}.zip .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            spectra-unity-${{ github.ref_name }}.zip
+          body: |
+            ## SpectraCore ${{ github.ref_name }}
+
+            Native C++ DSP library for Unity.
+
+            ### Installation
+
+            1. Download `spectra-unity-${{ github.ref_name }}.zip`
+            2. Extract to your Unity project's `Packages` folder
+            3. Restart Unity
+
+            ### Platforms
+
+            - Windows x64
+            - macOS (Intel + Apple Silicon)
+            - Linux x64
+            - Android (ARM64, ARMv7)
+            - iOS (ARM64)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
