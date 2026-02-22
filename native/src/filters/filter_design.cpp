@@ -199,6 +199,181 @@ FilterCoefficients butter_highpass(int order, double wc) {
     return coeffs;
 }
 
+// Design Chebyshev Type I lowpass using cascaded sections
+FilterCoefficients cheby1_lowpass(int order, double wc, double epsilon) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    // Chebyshev pole parameter: a = (1/n) * asinh(1/epsilon)
+    double a = std::asinh(1.0 / epsilon) / order;
+    double sinh_a = std::sinh(a);
+    double cosh_a = std::cosh(a);
+
+    int num_complex_pairs = order / 2;
+    bool has_real_pole = (order % 2 == 1);
+
+    // Real pole (for odd order): at s = -wc * sinh(a)
+    if (has_real_pole) {
+        double sigma = -wc * sinh_a;
+        // H(s) = |sigma| / (s - sigma) = -sigma / (s - sigma)
+        // Bilinear transform: s = 2*(z-1)/(z+1)
+        // H(z) = -sigma*(z+1) / (2*(z-1) - sigma*(z+1))
+        //      = -sigma*(z+1) / ((2-sigma)*z + (-2-sigma))
+
+        double K = 2.0 - sigma;  // sigma is negative, so K > 0
+        double b0 = -sigma / K;
+        double b1 = -sigma / K;
+        double a1 = (-2.0 - sigma) / K;
+
+        cascade_fos(coeffs, b0, b1, 1.0, a1);
+    }
+
+    // Complex conjugate pairs
+    for (int k = 0; k < num_complex_pairs; ++k) {
+        // Pole angle: theta_k = pi*(2k+1)/(2n)
+        double theta = constants::pi * (2.0 * k + 1.0) / (2.0 * order);
+        double sigma = -wc * sinh_a * std::sin(theta);
+        double omega = wc * cosh_a * std::cos(theta);
+
+        // Second-order section: H(s) = K / (s^2 - 2*sigma*s + sigma^2 + omega^2)
+        // where K is chosen for correct gain
+        double wn2 = sigma * sigma + omega * omega;  // natural frequency squared
+        double a1_s = -2.0 * sigma;
+        double a2_s = wn2;
+
+        // Bilinear transform: s = 2*(z-1)/(z+1)
+        // Denominator: 4(z-1)^2 - 2*a1_s*(z^2-1) + a2_s*(z+1)^2
+        double d0 = 4.0 + 2.0 * a1_s + a2_s;
+        double d1 = -8.0 + 2.0 * a2_s;
+        double d2 = 4.0 - 2.0 * a1_s + a2_s;
+
+        // Numerator for lowpass: wn2 * (z+1)^2
+        double b0 = wn2 / d0;
+        double b1 = 2.0 * wn2 / d0;
+        double b2 = wn2 / d0;
+        double a1_z = d1 / d0;
+        double a2_z = d2 / d0;
+
+        cascade_sos(coeffs, b0, b1, b2, 1.0, a1_z, a2_z);
+    }
+
+    // Normalize for unity passband MAXIMUM gain
+    // For Chebyshev Type I:
+    // - Odd order: DC is at passband maximum (gain = 1), normalize DC to 1
+    // - Even order: DC is at passband minimum (gain = 1/sqrt(1+eps^2))
+    //   The passband maximum is sqrt(1+eps^2) times DC gain
+    float b_sum = 0.0f, a_sum = 0.0f;
+    for (auto& b : coeffs.b) b_sum += b;
+    for (auto& a : coeffs.a) a_sum += a;
+
+    if (std::abs(b_sum) > 1e-10f) {
+        // Compute current DC gain
+        float dc_gain_raw = b_sum / a_sum;
+
+        // For odd order: DC should be 1 (max gain)
+        // For even order: DC should be 1/sqrt(1+eps^2), max gain is 1
+        // Both cases: we want max passband gain = 1
+        float target_dc;
+        if (has_real_pole) {
+            // Odd order: DC is at a maximum, set DC = 1
+            target_dc = 1.0f;
+        } else {
+            // Even order: DC is at a minimum, set DC = 1/sqrt(1+eps^2)
+            target_dc = 1.0f / std::sqrt(1.0f + static_cast<float>(epsilon * epsilon));
+        }
+
+        float gain = target_dc / dc_gain_raw;
+        for (auto& b : coeffs.b) b *= gain;
+    }
+
+    return coeffs;
+}
+
+// Design Chebyshev Type I highpass using cascaded sections
+FilterCoefficients cheby1_highpass(int order, double wc, double epsilon) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    double a = std::asinh(1.0 / epsilon) / order;
+    double sinh_a = std::sinh(a);
+    double cosh_a = std::cosh(a);
+
+    int num_complex_pairs = order / 2;
+    bool has_real_pole = (order % 2 == 1);
+
+    // Real pole (for odd order)
+    if (has_real_pole) {
+        double sigma = -wc * sinh_a;
+        // Highpass: H(s) = s / (s - sigma)
+        // Bilinear: H(z) = 2*(z-1)/(z+1) / (2*(z-1)/(z+1) - sigma)
+        //                = 2*(z-1) / ((2-sigma)*z + (-2-sigma))
+
+        double K = 2.0 - sigma;
+        double b0 = 2.0 / K;
+        double b1 = -2.0 / K;
+        double a1 = (-2.0 - sigma) / K;
+
+        cascade_fos(coeffs, b0, b1, 1.0, a1);
+    }
+
+    // Complex conjugate pairs
+    for (int k = 0; k < num_complex_pairs; ++k) {
+        double theta = constants::pi * (2.0 * k + 1.0) / (2.0 * order);
+        double sigma = -wc * sinh_a * std::sin(theta);
+        double omega = wc * cosh_a * std::cos(theta);
+
+        double wn2 = sigma * sigma + omega * omega;
+        double a1_s = -2.0 * sigma;
+        double a2_s = wn2;
+
+        double d0 = 4.0 + 2.0 * a1_s + a2_s;
+        double d1 = -8.0 + 2.0 * a2_s;
+        double d2 = 4.0 - 2.0 * a1_s + a2_s;
+
+        // Numerator for highpass: 4*(z-1)^2
+        double b0 = 4.0 / d0;
+        double b1 = -8.0 / d0;
+        double b2 = 4.0 / d0;
+        double a1_z = d1 / d0;
+        double a2_z = d2 / d0;
+
+        cascade_sos(coeffs, b0, b1, b2, 1.0, a1_z, a2_z);
+    }
+
+    // Normalize for unity passband MAXIMUM gain at Nyquist
+    // Similar to lowpass but at z = -1 (Nyquist)
+    float b_sum = 0.0f, a_sum = 0.0f;
+    for (size_t i = 0; i < coeffs.b.size(); ++i) {
+        float sign = (i % 2 == 0) ? 1.0f : -1.0f;
+        b_sum += sign * coeffs.b[i];
+    }
+    for (size_t i = 0; i < coeffs.a.size(); ++i) {
+        float sign = (i % 2 == 0) ? 1.0f : -1.0f;
+        a_sum += sign * coeffs.a[i];
+    }
+
+    if (std::abs(b_sum) > 1e-10f) {
+        // Compute current Nyquist gain
+        float nyq_gain_raw = std::abs(b_sum / a_sum);
+
+        // For odd order: Nyquist is at a maximum, set Nyquist = 1
+        // For even order: Nyquist is at a minimum, set Nyquist = 1/sqrt(1+eps^2)
+        float target_nyq;
+        if (has_real_pole) {
+            target_nyq = 1.0f;
+        } else {
+            target_nyq = 1.0f / std::sqrt(1.0f + static_cast<float>(epsilon * epsilon));
+        }
+
+        float gain = target_nyq / nyq_gain_raw;
+        for (auto& b : coeffs.b) b *= gain;
+    }
+
+    return coeffs;
+}
+
 } // anonymous namespace
 
 FilterCoefficients butter(int order, float normalized_freq, FilterType type) {
@@ -274,11 +449,35 @@ FilterCoefficients butter(int order, float low_freq, float high_freq, FilterType
 }
 
 FilterCoefficients cheby1(int order, float ripple_db, float normalized_freq, FilterType type) {
-    // Placeholder
     FilterCoefficients coeffs;
-    coeffs.b = {1.0f};
-    coeffs.a = {1.0f};
-    return coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || normalized_freq <= 0.0f || normalized_freq >= 1.0f ||
+        ripple_db <= 0.0f || ripple_db > 20.0f) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    // Calculate ripple parameter epsilon from dB
+    // At the passband edge: |H(jω)|² = 1/(1+ε²)
+    // In dB: 10*log10(1/(1+ε²)) = -Rp
+    // So: ε = sqrt(10^(Rp/10) - 1)
+    double epsilon = std::sqrt(std::pow(10.0, ripple_db / 10.0) - 1.0);
+
+    // Frequency prewarping
+    double wc = 2.0 * std::tan(constants::pi * normalized_freq / 2.0);
+
+    if (type == FilterType::Lowpass) {
+        return cheby1_lowpass(order, wc, epsilon);
+    } else if (type == FilterType::Highpass) {
+        return cheby1_highpass(order, wc, epsilon);
+    } else {
+        // Bandpass/Bandstop not yet implemented
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
 }
 
 FilterCoefficients cheby2(int order, float stopband_db, float normalized_freq, FilterType type) {
