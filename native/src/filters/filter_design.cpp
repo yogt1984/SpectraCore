@@ -1253,12 +1253,358 @@ std::vector<float> fir_windowed_sinc(int num_taps, float low_freq, float high_fr
     return h;
 }
 
+// ============================================================================
+// Parks-McClellan (Remez Exchange) Algorithm
+// ============================================================================
+
+namespace {
+
+// Compute Lagrange interpolation at frequency x given extremal set
+double lagrange_interp(const std::vector<double>& x_ext,
+                       const std::vector<double>& y_ext,
+                       const std::vector<double>& gamma,
+                       double x) {
+    const size_t n = x_ext.size();
+    double num = 0.0, den = 0.0;
+
+    for (size_t k = 0; k < n; ++k) {
+        double diff = x - x_ext[k];
+        if (std::abs(diff) < 1e-12) {
+            return y_ext[k];
+        }
+        double term = gamma[k] / diff;
+        num += term * y_ext[k];
+        den += term;
+    }
+
+    return (std::abs(den) > 1e-15) ? num / den : 0.0;
+}
+
+// Compute barycentric weights for Lagrange interpolation
+std::vector<double> compute_barycentric_weights(const std::vector<double>& x) {
+    const size_t n = x.size();
+    std::vector<double> gamma(n, 1.0);
+
+    for (size_t k = 0; k < n; ++k) {
+        for (size_t j = 0; j < n; ++j) {
+            if (j != k) {
+                gamma[k] /= (x[k] - x[j]);
+            }
+        }
+    }
+
+    return gamma;
+}
+
+// Compute delta (equiripple error) from extremal set
+double compute_delta(const std::vector<double>& omega_ext,
+                     const std::vector<double>& D_ext,
+                     const std::vector<double>& W_ext) {
+    const size_t n = omega_ext.size();
+
+    // Compute barycentric weights
+    std::vector<double> x_ext(n);
+    for (size_t k = 0; k < n; ++k) {
+        x_ext[k] = std::cos(omega_ext[k]);
+    }
+
+    auto gamma = compute_barycentric_weights(x_ext);
+
+    // Compute delta using the formula
+    double num = 0.0, den = 0.0;
+    for (size_t k = 0; k < n; ++k) {
+        double sign = ((k % 2) == 0) ? 1.0 : -1.0;
+        num += gamma[k] * D_ext[k];
+        den += sign * gamma[k] / W_ext[k];
+    }
+
+    return num / den;
+}
+
+// Find all local extrema in the error function
+std::vector<size_t> find_extrema(const std::vector<double>& error,
+                                  const std::vector<bool>& in_band) {
+    std::vector<size_t> extrema;
+    const size_t n = error.size();
+
+    if (n < 3) return extrema;
+
+    // Check first point if in band
+    if (in_band[0] && std::abs(error[0]) >= std::abs(error[1])) {
+        extrema.push_back(0);
+    }
+
+    // Find interior extrema
+    for (size_t i = 1; i < n - 1; ++i) {
+        if (!in_band[i]) continue;
+
+        bool is_max = (error[i] >= error[i-1] && error[i] >= error[i+1]);
+        bool is_min = (error[i] <= error[i-1] && error[i] <= error[i+1]);
+
+        if (is_max || is_min) {
+            extrema.push_back(i);
+        }
+    }
+
+    // Check last point if in band
+    if (in_band[n-1] && std::abs(error[n-1]) >= std::abs(error[n-2])) {
+        extrema.push_back(n - 1);
+    }
+
+    return extrema;
+}
+
+} // anonymous namespace
+
 std::vector<float> firpm(int order,
                          const std::vector<float>& freq_bands,
                          const std::vector<float>& amplitudes,
                          const std::vector<float>& weights) {
-    // Parks-McClellan placeholder
-    return std::vector<float>(order + 1, 1.0f / (order + 1));
+    // Validate inputs
+    if (order < 1 || freq_bands.size() < 2 || freq_bands.size() != amplitudes.size()) {
+        return std::vector<float>(order + 1, 1.0f / (order + 1));
+    }
+
+    const int num_taps = order + 1;
+    const int L = (num_taps + 1) / 2;  // Number of cosine terms
+    const bool is_symmetric = true;    // Type I/II (symmetric) filter
+
+    // Number of extremal frequencies
+    const int num_ext = L + 1;
+
+    // Create dense frequency grid (for searching extrema)
+    const int grid_density = 16;
+    const int grid_size = grid_density * num_taps;
+
+    std::vector<double> omega_grid(grid_size);
+    std::vector<double> D_grid(grid_size);  // Desired response
+    std::vector<double> W_grid(grid_size);  // Weight function
+    std::vector<bool> in_band(grid_size, false);
+
+    // Fill grid based on frequency bands
+    int grid_idx = 0;
+    const int num_bands = static_cast<int>(freq_bands.size()) / 2;
+
+    // Setup default weights if not provided
+    std::vector<float> w = weights;
+    if (w.empty()) {
+        w.resize(num_bands, 1.0f);
+    }
+
+    for (int b = 0; b < num_bands; ++b) {
+        float f_start = freq_bands[2 * b];
+        float f_end = freq_bands[2 * b + 1];
+        float a_start = amplitudes[2 * b];
+        float a_end = amplitudes[2 * b + 1];
+        float weight = (b < static_cast<int>(w.size())) ? w[b] : 1.0f;
+
+        // Points per band proportional to bandwidth
+        int points_in_band = static_cast<int>((f_end - f_start) * grid_size);
+        points_in_band = std::max(points_in_band, 10);
+
+        for (int i = 0; i < points_in_band && grid_idx < grid_size; ++i) {
+            float t = static_cast<float>(i) / (points_in_band - 1);
+            float f = f_start + t * (f_end - f_start);
+            float a = a_start + t * (a_end - a_start);
+
+            omega_grid[grid_idx] = constants::pi * f;
+            D_grid[grid_idx] = a;
+            W_grid[grid_idx] = weight;
+            in_band[grid_idx] = true;
+            ++grid_idx;
+        }
+    }
+
+    const int actual_grid_size = grid_idx;
+    omega_grid.resize(actual_grid_size);
+    D_grid.resize(actual_grid_size);
+    W_grid.resize(actual_grid_size);
+    in_band.resize(actual_grid_size);
+
+    if (actual_grid_size < num_ext) {
+        // Not enough grid points
+        return std::vector<float>(num_taps, 1.0f / num_taps);
+    }
+
+    // Initialize extremal frequencies (uniformly spaced)
+    std::vector<int> ext_indices(num_ext);
+    for (int k = 0; k < num_ext; ++k) {
+        ext_indices[k] = k * (actual_grid_size - 1) / (num_ext - 1);
+    }
+
+    // Remez exchange iteration
+    const int max_iterations = 50;
+    double prev_delta = 0.0;
+
+    for (int iter = 0; iter < max_iterations; ++iter) {
+        // Extract values at extremal frequencies
+        std::vector<double> omega_ext(num_ext);
+        std::vector<double> D_ext(num_ext);
+        std::vector<double> W_ext(num_ext);
+
+        for (int k = 0; k < num_ext; ++k) {
+            int idx = ext_indices[k];
+            omega_ext[k] = omega_grid[idx];
+            D_ext[k] = D_grid[idx];
+            W_ext[k] = W_grid[idx];
+        }
+
+        // Compute delta (equiripple deviation)
+        double delta = compute_delta(omega_ext, D_ext, W_ext);
+
+        // Check convergence
+        if (iter > 0 && std::abs(delta - prev_delta) < 1e-10 * std::abs(delta)) {
+            break;
+        }
+        prev_delta = delta;
+
+        // Compute optimal response at extremal points
+        std::vector<double> A_ext(num_ext);
+        for (int k = 0; k < num_ext; ++k) {
+            double sign = ((k % 2) == 0) ? 1.0 : -1.0;
+            A_ext[k] = D_ext[k] - sign * delta / W_ext[k];
+        }
+
+        // Convert to x = cos(omega) for Chebyshev interpolation
+        std::vector<double> x_ext(num_ext);
+        for (int k = 0; k < num_ext; ++k) {
+            x_ext[k] = std::cos(omega_ext[k]);
+        }
+
+        auto gamma = compute_barycentric_weights(x_ext);
+
+        // Compute response and error on entire grid
+        std::vector<double> A_grid(actual_grid_size);
+        std::vector<double> error(actual_grid_size);
+
+        for (int i = 0; i < actual_grid_size; ++i) {
+            double x = std::cos(omega_grid[i]);
+            A_grid[i] = lagrange_interp(x_ext, A_ext, gamma, x);
+            error[i] = W_grid[i] * (D_grid[i] - A_grid[i]);
+        }
+
+        // Find new extremal frequencies
+        auto new_extrema = find_extrema(error, in_band);
+
+        if (static_cast<int>(new_extrema.size()) < num_ext) {
+            // Not enough extrema found, keep current set
+            break;
+        }
+
+        // Select the num_ext largest extrema
+        std::vector<std::pair<double, int>> extrema_abs;
+        for (size_t idx : new_extrema) {
+            extrema_abs.emplace_back(std::abs(error[idx]), static_cast<int>(idx));
+        }
+        std::sort(extrema_abs.begin(), extrema_abs.end(),
+                  [](const auto& a, const auto& b) { return a.first > b.first; });
+
+        // Take top num_ext and sort by index
+        std::vector<int> new_indices;
+        for (int k = 0; k < num_ext && k < static_cast<int>(extrema_abs.size()); ++k) {
+            new_indices.push_back(extrema_abs[k].second);
+        }
+        std::sort(new_indices.begin(), new_indices.end());
+
+        ext_indices = new_indices;
+    }
+
+    // Final computation: extract filter coefficients from optimal response
+    // Using IDFT-like approach for Type I/II filters
+
+    // Get final optimal response
+    std::vector<double> omega_ext(num_ext);
+    std::vector<double> D_ext(num_ext);
+    std::vector<double> W_ext(num_ext);
+
+    for (int k = 0; k < num_ext; ++k) {
+        int idx = ext_indices[k];
+        omega_ext[k] = omega_grid[idx];
+        D_ext[k] = D_grid[idx];
+        W_ext[k] = W_grid[idx];
+    }
+
+    double delta = compute_delta(omega_ext, D_ext, W_ext);
+
+    std::vector<double> A_ext(num_ext);
+    for (int k = 0; k < num_ext; ++k) {
+        double sign = ((k % 2) == 0) ? 1.0 : -1.0;
+        A_ext[k] = D_ext[k] - sign * delta / W_ext[k];
+    }
+
+    std::vector<double> x_ext(num_ext);
+    for (int k = 0; k < num_ext; ++k) {
+        x_ext[k] = std::cos(omega_ext[k]);
+    }
+
+    auto gamma = compute_barycentric_weights(x_ext);
+
+    // Compute amplitude response at DFT frequencies
+    std::vector<double> A_dft(L);
+    for (int k = 0; k < L; ++k) {
+        double omega = constants::pi * k / (num_taps - 1);
+        if (omega > constants::pi) omega = constants::pi;
+        double x = std::cos(omega);
+        A_dft[k] = lagrange_interp(x_ext, A_ext, gamma, x);
+    }
+
+    // Convert amplitude response to filter coefficients using IDFT
+    std::vector<float> h(num_taps);
+
+    if (num_taps % 2 == 1) {
+        // Type I: odd length, symmetric
+        int M = (num_taps - 1) / 2;
+
+        for (int n = 0; n <= M; ++n) {
+            double sum = A_dft[0];
+            for (int k = 1; k < L; ++k) {
+                double omega = constants::pi * k / (num_taps - 1);
+                sum += 2.0 * A_dft[k] * std::cos(omega * (M - n));
+            }
+            h[n] = static_cast<float>(sum / (num_taps - 1));
+            h[num_taps - 1 - n] = h[n];  // Symmetric
+        }
+    } else {
+        // Type II: even length, symmetric
+        int M = num_taps / 2;
+
+        for (int n = 0; n < M; ++n) {
+            double sum = 0.0;
+            for (int k = 0; k < L; ++k) {
+                double omega = constants::pi * (2 * k + 1) / (2 * num_taps);
+                sum += A_dft[k] * std::cos(omega * (M - n - 0.5));
+            }
+            h[n] = static_cast<float>(2.0 * sum / num_taps);
+            h[num_taps - 1 - n] = h[n];
+        }
+    }
+
+    // Normalize based on filter type
+    // Check if it's lowpass-like (high amplitude at DC) or highpass-like
+    bool is_lowpass = (amplitudes.size() >= 2 && amplitudes[0] > 0.5f);
+    bool is_highpass = (amplitudes.size() >= 2 && amplitudes[0] < 0.5f &&
+                        amplitudes[amplitudes.size() - 1] > 0.5f);
+
+    if (is_lowpass) {
+        // Normalize DC gain
+        float sum = 0.0f;
+        for (float coef : h) sum += coef;
+        if (std::abs(sum) > 0.01f) {
+            for (float& coef : h) coef /= sum;
+        }
+    } else if (is_highpass) {
+        // Normalize Nyquist gain (alternating sum)
+        float sum = 0.0f;
+        for (size_t n = 0; n < h.size(); ++n) {
+            sum += h[n] * ((n % 2 == 0) ? 1.0f : -1.0f);
+        }
+        if (std::abs(sum) > 0.01f) {
+            for (float& coef : h) coef /= sum;
+        }
+    }
+    // For bandpass/differentiator/etc., leave as-is
+
+    return h;
 }
 
 void freqz(const FilterCoefficients& coeffs, Complex* H, size_t num_points) {

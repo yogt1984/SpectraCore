@@ -15,6 +15,7 @@ spectra_add_test(test_filters unit/test_filters.cpp)
 spectra_add_test(test_correlation unit/test_correlation.cpp)
 spectra_add_test(test_streaming_filter unit/test_streaming_filter.cpp)
 spectra_add_test(test_fir_design unit/test_fir_design.cpp)
+spectra_add_test(test_firpm unit/test_firpm.cpp)
 
 # Benchmarks (optional)
 if(SPECTRA_BUILD_BENCHMARKS)
