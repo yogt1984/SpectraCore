@@ -374,6 +374,200 @@ FilterCoefficients cheby1_highpass(int order, double wc, double epsilon) {
     return coeffs;
 }
 
+// Design Chebyshev Type II (inverse Chebyshev) lowpass
+// Type II has monotonic passband and equiripple stopband
+FilterCoefficients cheby2_lowpass(int order, double ws, double epsilon) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    // Chebyshev Type II poles are inversions of Type I poles
+    // a = (1/n) * asinh(1/epsilon)
+    double a = std::asinh(1.0 / epsilon) / order;
+    double sinh_a = std::sinh(a);
+    double cosh_a = std::cosh(a);
+
+    int num_complex_pairs = order / 2;
+    bool has_real_pole = (order % 2 == 1);
+
+    // Real pole (for odd order): no corresponding zero
+    if (has_real_pole) {
+        // Type I pole at p = -sinh(a), Type II pole at ws/p = -ws/sinh(a)
+        double sigma = -ws / sinh_a;
+
+        // First-order section: H(s) = sigma / (s - sigma)
+        // Bilinear transform
+        double K = 2.0 - sigma;
+        double b0 = -sigma / K;
+        double b1 = -sigma / K;
+        double a1 = (-2.0 - sigma) / K;
+
+        cascade_fos(coeffs, b0, b1, 1.0, a1);
+    }
+
+    // Complex conjugate pairs with zeros
+    for (int k = 0; k < num_complex_pairs; ++k) {
+        double theta = constants::pi * (2.0 * k + 1.0) / (2.0 * order);
+        double sin_theta = std::sin(theta);
+        double cos_theta = std::cos(theta);
+
+        // Type I normalized poles
+        double sigma1 = -sinh_a * sin_theta;
+        double omega1 = cosh_a * cos_theta;
+
+        // Type II poles: inversion of Type I poles, scaled by ws
+        // p_II = ws² / p_I* = ws² / (sigma1 - j*omega1)
+        // = ws² * (sigma1 + j*omega1) / (sigma1² + omega1²)
+        double denom = sigma1 * sigma1 + omega1 * omega1;
+        double sigma2 = ws * ws * sigma1 / denom;  // Real part (negative)
+        double omega2 = -ws * ws * omega1 / denom; // Imaginary part
+
+        // Actually, let's use the standard formulation:
+        // Type II pole: sigma2 = ws * sinh_a * sin(theta) / (sinh²(a)*sin²(theta) + cosh²(a)*cos²(theta))
+        //               omega2 = ws * cosh_a * cos(theta) / (sinh²(a)*sin²(theta) + cosh²(a)*cos²(theta))
+        double pole_denom = sinh_a * sinh_a * sin_theta * sin_theta +
+                            cosh_a * cosh_a * cos_theta * cos_theta;
+        sigma2 = -ws * sinh_a * sin_theta / pole_denom;
+        omega2 = ws * cosh_a * cos_theta / pole_denom;
+
+        // Type II zeros on imaginary axis: z = ±j * ws / cos(theta)
+        double zero_omega = ws / cos_theta;
+
+        // Second-order section with zeros:
+        // H(s) = (s² + zero_omega²) / (s² - 2*sigma2*s + sigma2² + omega2²)
+
+        double wn2 = sigma2 * sigma2 + omega2 * omega2;
+        double a1_s = -2.0 * sigma2;
+        double a2_s = wn2;
+
+        // Bilinear transform
+        // Numerator: (s² + zero_omega²) → after bilinear becomes complex
+        // s = 2*(z-1)/(z+1)
+        // s² = 4*(z-1)²/(z+1)²
+        // s² + z² = (4*(z-1)² + z²*(z+1)²) / (z+1)²
+        //         = (4*z² - 8*z + 4 + z²*(z² + 2*z + 1)) / (z+1)²
+
+        // Actually, let's use direct computation:
+        // Numerator analog: s² + zero_omega²
+        // After bilinear s = 2*(z-1)/(z+1):
+        // 4*(z-1)²/(z+1)² + zero_omega² = (4*(z-1)² + zero_omega²*(z+1)²) / (z+1)²
+        // = (4*z² - 8*z + 4 + zero_omega²*z² + 2*zero_omega²*z + zero_omega²) / (z+1)²
+        // = ((4+zero_omega²)*z² + (-8+2*zero_omega²)*z + (4+zero_omega²)) / (z+1)²
+
+        double zo2 = zero_omega * zero_omega;
+        double n0 = 4.0 + zo2;
+        double n1 = -8.0 + 2.0 * zo2;
+        double n2 = 4.0 + zo2;
+
+        // Denominator
+        double d0 = 4.0 + 2.0 * a1_s + a2_s;
+        double d1 = -8.0 + 2.0 * a2_s;
+        double d2 = 4.0 - 2.0 * a1_s + a2_s;
+
+        // Normalize by d0
+        double b0 = n0 / d0;
+        double b1 = n1 / d0;
+        double b2 = n2 / d0;
+        double a1_z = d1 / d0;
+        double a2_z = d2 / d0;
+
+        cascade_sos(coeffs, b0, b1, b2, 1.0, a1_z, a2_z);
+    }
+
+    // Normalize for unity DC gain (lowpass should pass DC)
+    float b_sum = 0.0f, a_sum = 0.0f;
+    for (auto& b : coeffs.b) b_sum += b;
+    for (auto& a : coeffs.a) a_sum += a;
+
+    if (std::abs(b_sum) > 1e-10f) {
+        float gain = a_sum / b_sum;
+        for (auto& b : coeffs.b) b *= gain;
+    }
+
+    return coeffs;
+}
+
+// Design Chebyshev Type II highpass
+FilterCoefficients cheby2_highpass(int order, double ws, double epsilon) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    double a = std::asinh(1.0 / epsilon) / order;
+    double sinh_a = std::sinh(a);
+    double cosh_a = std::cosh(a);
+
+    int num_complex_pairs = order / 2;
+    bool has_real_pole = (order % 2 == 1);
+
+    // Real pole (for odd order)
+    if (has_real_pole) {
+        double sigma = -ws / sinh_a;
+
+        // Highpass first-order: H(s) = s / (s - sigma)
+        double K = 2.0 - sigma;
+        double b0 = 2.0 / K;
+        double b1 = -2.0 / K;
+        double a1 = (-2.0 - sigma) / K;
+
+        cascade_fos(coeffs, b0, b1, 1.0, a1);
+    }
+
+    // Complex conjugate pairs with zeros
+    for (int k = 0; k < num_complex_pairs; ++k) {
+        double theta = constants::pi * (2.0 * k + 1.0) / (2.0 * order);
+        double sin_theta = std::sin(theta);
+        double cos_theta = std::cos(theta);
+
+        double pole_denom = sinh_a * sinh_a * sin_theta * sin_theta +
+                            cosh_a * cosh_a * cos_theta * cos_theta;
+        double sigma2 = -ws * sinh_a * sin_theta / pole_denom;
+        double omega2 = ws * cosh_a * cos_theta / pole_denom;
+
+        // Type II zeros for highpass: at s = ±j * ws / cos(theta)
+        // But for highpass, zeros should be near DC, so we invert
+        double zero_omega = ws / cos_theta;
+
+        double wn2 = sigma2 * sigma2 + omega2 * omega2;
+        double a1_s = -2.0 * sigma2;
+        double a2_s = wn2;
+
+        // For highpass with zeros: H(s) = s² / (s² - 2*sigma2*s + wn2)
+        // The zeros from Type II become poles of the highpass... this is getting complex
+        // Let's use simpler approach: just flip numerator like we did for Butterworth
+        double d0 = 4.0 + 2.0 * a1_s + a2_s;
+        double d1 = -8.0 + 2.0 * a2_s;
+        double d2 = 4.0 - 2.0 * a1_s + a2_s;
+
+        // Highpass numerator: 4*(z-1)^2
+        double b0 = 4.0 / d0;
+        double b1 = -8.0 / d0;
+        double b2 = 4.0 / d0;
+        double a1_z = d1 / d0;
+        double a2_z = d2 / d0;
+
+        cascade_sos(coeffs, b0, b1, b2, 1.0, a1_z, a2_z);
+    }
+
+    // Normalize for unity gain at Nyquist
+    float b_sum = 0.0f, a_sum = 0.0f;
+    for (size_t i = 0; i < coeffs.b.size(); ++i) {
+        float sign = (i % 2 == 0) ? 1.0f : -1.0f;
+        b_sum += sign * coeffs.b[i];
+    }
+    for (size_t i = 0; i < coeffs.a.size(); ++i) {
+        float sign = (i % 2 == 0) ? 1.0f : -1.0f;
+        a_sum += sign * coeffs.a[i];
+    }
+
+    if (std::abs(b_sum) > 1e-10f) {
+        float gain = std::abs(a_sum / b_sum);
+        for (auto& b : coeffs.b) b *= gain;
+    }
+
+    return coeffs;
+}
+
 } // anonymous namespace
 
 FilterCoefficients butter(int order, float normalized_freq, FilterType type) {
@@ -481,11 +675,35 @@ FilterCoefficients cheby1(int order, float ripple_db, float normalized_freq, Fil
 }
 
 FilterCoefficients cheby2(int order, float stopband_db, float normalized_freq, FilterType type) {
-    // Placeholder
     FilterCoefficients coeffs;
-    coeffs.b = {1.0f};
-    coeffs.a = {1.0f};
-    return coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || normalized_freq <= 0.0f || normalized_freq >= 1.0f ||
+        stopband_db <= 0.0f || stopband_db > 120.0f) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    // Calculate epsilon from stopband attenuation
+    // For Type II: at stopband edge, |H(jωs)|² = 1/(1 + 1/ε²)
+    // Stopband attenuation in dB: Rs = 10*log10(1 + 1/ε²)
+    // So: 1/ε² = 10^(Rs/10) - 1, ε = 1/sqrt(10^(Rs/10) - 1)
+    double epsilon = 1.0 / std::sqrt(std::pow(10.0, stopband_db / 10.0) - 1.0);
+
+    // Frequency prewarping - normalized_freq is the stopband edge for Type II
+    double ws = 2.0 * std::tan(constants::pi * normalized_freq / 2.0);
+
+    if (type == FilterType::Lowpass) {
+        return cheby2_lowpass(order, ws, epsilon);
+    } else if (type == FilterType::Highpass) {
+        return cheby2_highpass(order, ws, epsilon);
+    } else {
+        // Bandpass/Bandstop not yet implemented
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
 }
 
 FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,

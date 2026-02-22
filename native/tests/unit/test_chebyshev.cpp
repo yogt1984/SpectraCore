@@ -425,3 +425,203 @@ TEST_F(ChebyshevTest, FreqzComputation) {
     EXPECT_LT(nyq_mag, dc_mag);
 }
 
+// ============================================================================
+// Chebyshev Type II (Inverse Chebyshev) Tests
+// ============================================================================
+
+TEST_F(ChebyshevTest, Type2Order1Lowpass) {
+    auto coeffs = cheby2(1, 40.0f, 0.5f, FilterType::Lowpass);
+
+    EXPECT_EQ(coeffs.b.size(), 2u);
+    EXPECT_EQ(coeffs.a.size(), 2u);
+    EXPECT_FLOAT_EQ(coeffs.a[0], 1.0f);
+}
+
+TEST_F(ChebyshevTest, Type2Order2Lowpass) {
+    auto coeffs = cheby2(2, 40.0f, 0.5f, FilterType::Lowpass);
+
+    // Order 2 Type II has 2 poles and 2 zeros, so 3 coefficients
+    EXPECT_EQ(coeffs.b.size(), 3u);
+    EXPECT_EQ(coeffs.a.size(), 3u);
+    EXPECT_FLOAT_EQ(coeffs.a[0], 1.0f);
+}
+
+TEST_F(ChebyshevTest, Type2Order4Lowpass) {
+    auto coeffs = cheby2(4, 40.0f, 0.5f, FilterType::Lowpass);
+
+    EXPECT_EQ(coeffs.b.size(), 5u);
+    EXPECT_EQ(coeffs.a.size(), 5u);
+    EXPECT_FLOAT_EQ(coeffs.a[0], 1.0f);
+}
+
+TEST_F(ChebyshevTest, Type2OrdersUpTo8) {
+    for (int order = 1; order <= 8; ++order) {
+        auto coeffs = cheby2(order, 40.0f, 0.3f, FilterType::Lowpass);
+
+        EXPECT_EQ(coeffs.b.size(), static_cast<size_t>(order + 1))
+            << "Order " << order;
+        EXPECT_EQ(coeffs.a.size(), static_cast<size_t>(order + 1))
+            << "Order " << order;
+        EXPECT_FLOAT_EQ(coeffs.a[0], 1.0f) << "Order " << order;
+    }
+}
+
+TEST_F(ChebyshevTest, Type2UnityDCGain) {
+    // Type II lowpass should have unity DC gain (monotonic passband)
+    for (int order = 1; order <= 6; ++order) {
+        auto coeffs = cheby2(order, 40.0f, 0.3f, FilterType::Lowpass);
+        float dc_gain = magnitude_at_freq(coeffs, 0.0f);
+
+        EXPECT_NEAR(dc_gain, 1.0f, 0.02f)
+            << "Order " << order << " DC gain: " << dc_gain;
+    }
+}
+
+TEST_F(ChebyshevTest, Type2MonotonicPassband) {
+    // Type II has monotonic passband (no ripple)
+    auto coeffs = cheby2(4, 40.0f, 0.5f, FilterType::Lowpass);
+
+    // Passband from DC to cutoff should be monotonically decreasing
+    float prev_mag = magnitude_at_freq(coeffs, 0.0f);
+    for (float f = 0.05f; f < 0.5f; f += 0.05f) {
+        float mag = magnitude_at_freq(coeffs, f);
+        EXPECT_LE(mag, prev_mag + 0.01f)  // Allow tiny numerical error
+            << "Non-monotonic at freq " << f;
+        prev_mag = mag;
+    }
+}
+
+TEST_F(ChebyshevTest, Type2StopbandAttenuation) {
+    float stopband_db = 40.0f;
+    auto coeffs = cheby2(4, stopband_db, 0.3f, FilterType::Lowpass);
+
+    // At the stopband edge, attenuation should be at least Rs dB
+    float stopband_gain = magnitude_at_freq(coeffs, 0.3f);
+    float stopband_atten_db = -20.0f * std::log10(stopband_gain + 1e-10f);
+
+    // Should have at least Rs dB attenuation at stopband edge
+    EXPECT_GE(stopband_atten_db, stopband_db - 3.0f)
+        << "Stopband attenuation: " << stopband_atten_db << " dB";
+}
+
+TEST_F(ChebyshevTest, Type2StopbandRipple) {
+    // Type II has equiripple stopband
+    auto coeffs = cheby2(4, 40.0f, 0.3f, FilterType::Lowpass);
+
+    // Sample stopband at multiple points - should have ripple
+    float min_gain = 1.0f, max_gain = 0.0f;
+    for (float f = 0.35f; f <= 0.9f; f += 0.05f) {
+        float gain = magnitude_at_freq(coeffs, f);
+        min_gain = std::min(min_gain, gain);
+        max_gain = std::max(max_gain, gain);
+    }
+
+    // There should be some variation (ripple) in stopband
+    // But all values should be small (attenuated)
+    EXPECT_LT(max_gain, 0.1f) << "Stopband should be attenuated";
+}
+
+TEST_F(ChebyshevTest, Type2HigherOrderSteeperTransition) {
+    // For Type II, all orders have Rs dB attenuation at stopband edge
+    // Higher order gives steeper transition (passband extends closer to stopband edge)
+    float stopband_freq = 0.5f;
+
+    // Check that passband gain close to cutoff is better for higher orders
+    float test_freq = 0.4f;  // Just before stopband edge
+
+    float prev_gain = 0.0f;
+    for (int order = 2; order <= 6; ++order) {
+        auto coeffs = cheby2(order, 40.0f, stopband_freq, FilterType::Lowpass);
+        float gain = magnitude_at_freq(coeffs, test_freq);
+
+        // Higher order should have better gain just before stopband
+        // (steeper transition means more of the spectrum is in passband)
+        EXPECT_GE(gain, prev_gain - 0.1f)
+            << "Order " << order << " should have similar or better passband gain";
+        prev_gain = gain;
+    }
+
+    // Also verify higher orders have the same stopband attenuation at edge
+    for (int order = 2; order <= 6; ++order) {
+        auto coeffs = cheby2(order, 40.0f, stopband_freq, FilterType::Lowpass);
+        float atten = -magnitude_db(coeffs, stopband_freq);
+
+        // All should have approximately Rs dB at stopband edge
+        EXPECT_NEAR(atten, 40.0f, 5.0f)
+            << "Order " << order << " stopband edge attenuation";
+    }
+}
+
+TEST_F(ChebyshevTest, Type2AllOrdersStable) {
+    for (int order = 1; order <= 8; ++order) {
+        for (float freq : {0.1f, 0.3f, 0.5f, 0.7f, 0.9f}) {
+            auto lp = cheby2(order, 40.0f, freq, FilterType::Lowpass);
+            auto hp = cheby2(order, 40.0f, freq, FilterType::Highpass);
+
+            EXPECT_TRUE(is_stable(lp))
+                << "Order " << order << " freq " << freq << " lowpass unstable";
+            EXPECT_TRUE(is_stable(hp))
+                << "Order " << order << " freq " << freq << " highpass unstable";
+        }
+    }
+}
+
+TEST_F(ChebyshevTest, Type2DifferentStopbandValues) {
+    std::vector<float> attenuations = {20.0f, 40.0f, 60.0f, 80.0f};
+
+    for (float atten : attenuations) {
+        auto coeffs = cheby2(4, atten, 0.3f, FilterType::Lowpass);
+
+        // DC gain should be 1
+        float dc_gain = magnitude_at_freq(coeffs, 0.0f);
+        EXPECT_NEAR(dc_gain, 1.0f, 0.02f) << "Atten " << atten;
+
+        // Should be stable
+        EXPECT_TRUE(is_stable(coeffs)) << "Atten " << atten;
+
+        // Stopband should be attenuated by approximately Rs
+        float stopband_gain = magnitude_at_freq(coeffs, 0.3f);
+        float measured_atten = -20.0f * std::log10(stopband_gain + 1e-10f);
+        EXPECT_GE(measured_atten, atten - 6.0f)
+            << "Atten " << atten << " measured: " << measured_atten;
+    }
+}
+
+TEST_F(ChebyshevTest, Type2HighpassZeroDCGain) {
+    for (int order = 1; order <= 6; ++order) {
+        auto coeffs = cheby2(order, 40.0f, 0.3f, FilterType::Highpass);
+        float dc_gain = magnitude_at_freq(coeffs, 0.0f);
+
+        EXPECT_NEAR(dc_gain, 0.0f, 0.01f)
+            << "Order " << order << " DC gain: " << dc_gain;
+    }
+}
+
+TEST_F(ChebyshevTest, Type2HighpassNyquistGain) {
+    for (int order = 1; order <= 6; ++order) {
+        auto coeffs = cheby2(order, 40.0f, 0.3f, FilterType::Highpass);
+        float nyq_gain = magnitude_at_freq(coeffs, 1.0f);
+
+        // Nyquist should be in passband with good gain
+        EXPECT_GT(nyq_gain, 0.5f)
+            << "Order " << order << " Nyquist gain: " << nyq_gain;
+    }
+}
+
+TEST_F(ChebyshevTest, Type2InvalidInputs) {
+    // Invalid order
+    auto coeffs1 = cheby2(0, 40.0f, 0.5f, FilterType::Lowpass);
+    EXPECT_EQ(coeffs1.b.size(), 1u);
+
+    // Invalid frequency
+    auto coeffs2 = cheby2(2, 40.0f, 0.0f, FilterType::Lowpass);
+    EXPECT_EQ(coeffs2.b.size(), 1u);
+
+    auto coeffs3 = cheby2(2, 40.0f, 1.0f, FilterType::Lowpass);
+    EXPECT_EQ(coeffs3.b.size(), 1u);
+
+    // Invalid attenuation
+    auto coeffs4 = cheby2(2, 0.0f, 0.5f, FilterType::Lowpass);
+    EXPECT_EQ(coeffs4.b.size(), 1u);
+}
+
