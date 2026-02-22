@@ -1105,13 +1105,24 @@ FilterCoefficients bessel(int order, float normalized_freq, FilterType type) {
 
 std::vector<float> fir_windowed_sinc(int num_taps, float normalized_freq,
                                       FilterType type, WindowType window) {
+    // Validate inputs
+    if (num_taps < 1 || normalized_freq <= 0.0f || normalized_freq >= 1.0f) {
+        return std::vector<float>(std::max(1, num_taps), 1.0f);
+    }
+
+    // Ensure odd number of taps for symmetric FIR (Type I)
+    // Even taps have a zero at Nyquist which is problematic for highpass
+    if (type == FilterType::Highpass && (num_taps % 2 == 0)) {
+        num_taps += 1;
+    }
+
     std::vector<float> h(num_taps);
     const int M = num_taps - 1;
-    const float fc = normalized_freq / 2.0f;  // Cutoff in terms of sample rate
+    const float fc = normalized_freq / 2.0f;  // Cutoff in terms of sample rate (0.5 = Nyquist)
 
-    // Generate sinc
+    // Generate ideal lowpass sinc
     for (int n = 0; n <= M; ++n) {
-        const float nm = n - M / 2.0f;
+        const float nm = static_cast<float>(n) - static_cast<float>(M) / 2.0f;
         if (std::abs(nm) < 1e-6f) {
             h[n] = 2.0f * fc;
         } else {
@@ -1133,13 +1144,113 @@ std::vector<float> fir_windowed_sinc(int num_taps, float normalized_freq,
         h[M / 2] += 1.0f;
     }
 
+    // Normalize for unity gain at DC (lowpass) or Nyquist (highpass)
+    float sum = 0.0f;
+    if (type == FilterType::Lowpass) {
+        // Sum of coefficients = DC gain
+        for (float coef : h) sum += coef;
+    } else {
+        // Alternating sum = gain at Nyquist
+        for (int n = 0; n < num_taps; ++n) {
+            sum += h[n] * ((n % 2 == 0) ? 1.0f : -1.0f);
+        }
+    }
+
+    if (std::abs(sum) > 1e-10f) {
+        for (float& coef : h) coef /= sum;
+    }
+
     return h;
 }
 
 std::vector<float> fir_windowed_sinc(int num_taps, float low_freq, float high_freq,
                                       FilterType type, WindowType window) {
-    // Placeholder
-    return std::vector<float>(num_taps, 1.0f / num_taps);
+    // Validate inputs
+    if (num_taps < 1 || low_freq <= 0.0f || high_freq >= 1.0f || low_freq >= high_freq) {
+        return std::vector<float>(std::max(1, num_taps), 1.0f / std::max(1, num_taps));
+    }
+
+    // For bandstop, ensure odd number of taps
+    if (type == FilterType::Bandstop && (num_taps % 2 == 0)) {
+        num_taps += 1;
+    }
+
+    std::vector<float> h(num_taps);
+    const int M = num_taps - 1;
+    const float fc_low = low_freq / 2.0f;   // Lower cutoff
+    const float fc_high = high_freq / 2.0f; // Upper cutoff
+
+    // Generate window
+    std::vector<float> win = generate_window(num_taps, window);
+
+    if (type == FilterType::Bandpass) {
+        // Bandpass = Highpass(low) convolved with Lowpass(high)
+        // Or equivalently: Lowpass(high) - Lowpass(low)
+        for (int n = 0; n <= M; ++n) {
+            const float nm = static_cast<float>(n) - static_cast<float>(M) / 2.0f;
+            float h_high, h_low;
+
+            if (std::abs(nm) < 1e-6f) {
+                h_high = 2.0f * fc_high;
+                h_low = 2.0f * fc_low;
+            } else {
+                h_high = std::sin(constants::two_pi * fc_high * nm) / (constants::pi * nm);
+                h_low = std::sin(constants::two_pi * fc_low * nm) / (constants::pi * nm);
+            }
+
+            h[n] = (h_high - h_low) * win[n];
+        }
+
+        // Normalize for unity gain at center frequency
+        float center_freq = (low_freq + high_freq) / 2.0f;
+        float w_center = constants::pi * center_freq;
+        float sum_real = 0.0f;
+        for (int n = 0; n < num_taps; ++n) {
+            float phase = w_center * (n - M / 2.0f);
+            sum_real += h[n] * std::cos(phase);
+        }
+        if (std::abs(sum_real) > 1e-10f) {
+            for (float& coef : h) coef /= sum_real;
+        }
+
+    } else if (type == FilterType::Bandstop) {
+        // Bandstop = Lowpass(low) + Highpass(high) = 1 - Bandpass
+        // First create bandpass, then invert
+        for (int n = 0; n <= M; ++n) {
+            const float nm = static_cast<float>(n) - static_cast<float>(M) / 2.0f;
+            float h_high, h_low;
+
+            if (std::abs(nm) < 1e-6f) {
+                h_high = 2.0f * fc_high;
+                h_low = 2.0f * fc_low;
+            } else {
+                h_high = std::sin(constants::two_pi * fc_high * nm) / (constants::pi * nm);
+                h_low = std::sin(constants::two_pi * fc_low * nm) / (constants::pi * nm);
+            }
+
+            // Bandpass kernel
+            h[n] = (h_high - h_low) * win[n];
+        }
+
+        // Spectral inversion: bandstop = delta - bandpass
+        for (int n = 0; n < num_taps; ++n) {
+            h[n] = -h[n];
+        }
+        h[M / 2] += 1.0f;
+
+        // Normalize for unity DC gain
+        float sum = 0.0f;
+        for (float coef : h) sum += coef;
+        if (std::abs(sum) > 1e-10f) {
+            for (float& coef : h) coef /= sum;
+        }
+
+    } else {
+        // Invalid type for this overload
+        return std::vector<float>(num_taps, 1.0f / num_taps);
+    }
+
+    return h;
 }
 
 std::vector<float> firpm(int order,
