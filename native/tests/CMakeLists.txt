@@ -19,6 +19,7 @@ spectra_add_test(test_firpm unit/test_firpm.cpp)
 spectra_add_test(test_psd unit/test_psd.cpp)
 spectra_add_test(test_hilbert unit/test_hilbert.cpp)
 spectra_add_test(test_resample unit/test_resample.cpp)
+spectra_add_test(test_freqz unit/test_freqz.cpp)
 
 # Benchmarks (optional)
 if(SPECTRA_BUILD_BENCHMARKS)
