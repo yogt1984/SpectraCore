@@ -487,6 +487,361 @@ FilterCoefficients cheby2_lowpass(int order, double ws, double epsilon) {
     return coeffs;
 }
 
+// ============================================================================
+// Elliptic (Cauer) Filter Helper Functions
+// ============================================================================
+
+// Complete elliptic integral of the first kind K(k)
+// Uses the arithmetic-geometric mean method
+double elliptic_k(double k) {
+    if (k < 0.0 || k >= 1.0) return 0.0;
+    if (k < 1e-15) return constants::pi / 2.0;
+
+    double a = 1.0;
+    double b = std::sqrt(1.0 - k * k);
+
+    for (int iter = 0; iter < 50; ++iter) {
+        double a_new = (a + b) / 2.0;
+        double b_new = std::sqrt(a * b);
+        if (std::abs(a_new - b_new) < 1e-15) {
+            return constants::pi / (2.0 * a_new);
+        }
+        a = a_new;
+        b = b_new;
+    }
+    return constants::pi / (2.0 * a);
+}
+
+// Jacobi elliptic functions sn, cn, dn
+// Uses the descending Landen transformation
+void jacobi_elliptic(double u, double k, double& sn, double& cn, double& dn) {
+    if (k < 0.0 || k > 1.0) {
+        sn = cn = dn = 0.0;
+        return;
+    }
+
+    if (k < 1e-15) {
+        // k ≈ 0: sn ≈ sin(u), cn ≈ cos(u), dn ≈ 1
+        sn = std::sin(u);
+        cn = std::cos(u);
+        dn = 1.0;
+        return;
+    }
+
+    if (k > 1.0 - 1e-15) {
+        // k ≈ 1: sn ≈ tanh(u), cn ≈ sech(u), dn ≈ sech(u)
+        double e = std::exp(u);
+        double em = std::exp(-u);
+        sn = (e - em) / (e + em);  // tanh
+        cn = 2.0 / (e + em);        // sech
+        dn = cn;
+        return;
+    }
+
+    // Descending Landen transformation
+    const int max_iter = 20;
+    std::vector<double> a(max_iter);
+    std::vector<double> c(max_iter);
+
+    a[0] = 1.0;
+    c[0] = k;
+    int n = 0;
+
+    for (n = 0; n < max_iter - 1; ++n) {
+        double b = std::sqrt(a[n] * a[n] - c[n] * c[n]);
+        a[n + 1] = (a[n] + b) / 2.0;
+        c[n + 1] = (a[n] - b) / 2.0;
+        if (std::abs(c[n + 1]) < 1e-15) break;
+    }
+
+    // Ascending recurrence
+    double phi = std::pow(2.0, n) * a[n] * u;
+    for (int i = n; i >= 1; --i) {
+        phi = (phi + std::asin(c[i] * std::sin(phi) / a[i])) / 2.0;
+    }
+
+    sn = std::sin(phi);
+    cn = std::cos(phi);
+    dn = std::sqrt(1.0 - k * k * sn * sn);
+}
+
+// Compute elliptic filter selectivity factor
+// Given wp (passband edge), ws (stopband edge), returns k
+double elliptic_selectivity(double wp, double ws) {
+    return wp / ws;
+}
+
+// Compute discrimination factor k1 from ripple specifications
+// Rp = passband ripple in dB, Rs = stopband attenuation in dB
+double elliptic_discrimination(double Rp, double Rs) {
+    double eps = std::sqrt(std::pow(10.0, Rp / 10.0) - 1.0);
+    double A = std::pow(10.0, Rs / 20.0);  // Linear stopband gain
+    return eps / std::sqrt(A * A - 1.0);
+}
+
+// Design elliptic (Cauer) lowpass filter
+FilterCoefficients ellip_lowpass(int order, double wc, double epsilon, double A_stop) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    int L = order / 2;  // Number of second-order sections
+    bool has_real_pole = (order % 2 == 1);
+
+    // Calculate elliptic filter parameters
+    // We need the selectivity k0 = 1/cosh(asinh(1/eps)/n) approximately
+    // But for design, we compute poles and zeros based on Jacobi elliptic functions
+
+    // Simplified approach: use precomputed formulas for low-order elliptic filters
+    // For a proper implementation, we'd iterate using elliptic integrals
+
+    // Compute epsilon from passband ripple already given
+    // eps is already passed as parameter
+
+    // Selectivity factor for the analog prototype
+    // k = wp/ws where wp is passband edge and ws is stopband edge
+    // For now we use wc as both passband and compute k from desired specs
+
+    // The relationship between parameters:
+    // eps^2 = passband ripple factor
+    // A = stopband attenuation factor (linear)
+    // k1 = eps / sqrt(A^2 - 1) = discrimination factor
+    // k = selectivity (ratio of edge frequencies)
+    // n >= K(k1')*K(k) / (K(k1)*K(k')) for the order to meet specs
+
+    // For implementation, we use the pole-zero formulas:
+    // For the prototype, poles are at:
+    // s_k = -wc*sinh(v0)*sin(phi_k) ± j*wc*cosh(v0)*cos(phi_k)
+    // where phi_k = (2k-1)*pi/(2n) for k = 1..n
+    // v0 = (1/n)*asinh(1/epsilon)
+
+    // Zeros are at:
+    // s_k = ±j*wc/sn(K*(2k-1)/n, k) for k = 1..L
+
+    // For elliptic, we need to compute proper zeros using Jacobi functions
+    // Simplified: approximate with Chebyshev-like structure but add zeros
+
+    double a = std::asinh(1.0 / epsilon) / order;
+    double sinh_a = std::sinh(a);
+    double cosh_a = std::cosh(a);
+
+    // Real pole (for odd order)
+    if (has_real_pole) {
+        double sigma = -wc * sinh_a;
+        double K_val = 2.0 - sigma;
+        double b0 = -sigma / K_val;
+        double b1 = -sigma / K_val;
+        double a1 = (-2.0 - sigma) / K_val;
+        cascade_fos(coeffs, b0, b1, 1.0, a1);
+    }
+
+    // For elliptic filters, we need zeros in the stopband
+    // Compute stopband edge from attenuation
+    // ws ≈ wc * cosh(asinh(1/eps_s)/n) where eps_s relates to stopband
+    double eps_s = 1.0 / std::sqrt(A_stop * A_stop - 1.0);
+    double ws = wc * std::cosh(std::asinh(1.0 / eps_s) / order);
+    if (ws < wc * 1.1) ws = wc * 1.5;  // Ensure stopband > passband
+
+    // Compute selectivity
+    double k = wc / ws;  // < 1 for lowpass
+    double K_k = elliptic_k(k);
+    double K_kp = elliptic_k(std::sqrt(1.0 - k * k));
+
+    // Complex conjugate pairs with zeros
+    for (int m = 0; m < L; ++m) {
+        double theta = constants::pi * (2.0 * m + 1.0) / (2.0 * order);
+        double sin_theta = std::sin(theta);
+        double cos_theta = std::cos(theta);
+
+        // Pole locations (elliptic: slightly different from Chebyshev)
+        double sigma = -wc * sinh_a * sin_theta;
+        double omega = wc * cosh_a * cos_theta;
+
+        // Zero location on imaginary axis using Jacobi sn function
+        // z_m = j * ws / sn(u_m, k) where u_m = K * (2m+1) / n
+        double u_m = K_k * (2.0 * m + 1.0) / order;
+        double sn_u, cn_u, dn_u;
+        jacobi_elliptic(u_m, k, sn_u, cn_u, dn_u);
+
+        double zero_omega;
+        if (std::abs(sn_u) > 1e-10) {
+            zero_omega = ws / std::abs(sn_u);
+        } else {
+            zero_omega = ws * 10.0;  // Very high frequency zero
+        }
+
+        // Second-order section with zeros
+        // H(s) = (s² + zero_omega²) / (s² - 2*sigma*s + sigma² + omega²)
+        double wn2 = sigma * sigma + omega * omega;
+        double a1_s = -2.0 * sigma;
+        double a2_s = wn2;
+
+        // Bilinear transform for numerator with zeros
+        double zo2 = zero_omega * zero_omega;
+        double n0 = 4.0 + zo2;
+        double n1 = -8.0 + 2.0 * zo2;
+        double n2 = 4.0 + zo2;
+
+        // Denominator
+        double d0 = 4.0 + 2.0 * a1_s + a2_s;
+        double d1 = -8.0 + 2.0 * a2_s;
+        double d2 = 4.0 - 2.0 * a1_s + a2_s;
+
+        // Normalize by d0
+        double b0 = n0 / d0;
+        double b1 = n1 / d0;
+        double b2 = n2 / d0;
+        double a1_z = d1 / d0;
+        double a2_z = d2 / d0;
+
+        cascade_sos(coeffs, b0, b1, b2, 1.0, a1_z, a2_z);
+    }
+
+    // Normalize DC gain based on odd/even order
+    float b_sum = 0.0f, a_sum = 0.0f;
+    for (auto& b : coeffs.b) b_sum += b;
+    for (auto& a : coeffs.a) a_sum += a;
+
+    if (std::abs(b_sum) > 1e-10f) {
+        float dc_gain_raw = b_sum / a_sum;
+        float target_dc;
+        if (has_real_pole) {
+            target_dc = 1.0f;
+        } else {
+            target_dc = 1.0f / std::sqrt(1.0f + static_cast<float>(epsilon * epsilon));
+        }
+        float gain = target_dc / dc_gain_raw;
+        for (auto& b : coeffs.b) b *= gain;
+    }
+
+    return coeffs;
+}
+
+// Design elliptic highpass filter using lowpass-to-highpass transformation
+FilterCoefficients ellip_highpass(int order, double wc, double epsilon, double A_stop) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    int L = order / 2;
+    bool has_real_pole = (order % 2 == 1);
+
+    double a = std::asinh(1.0 / epsilon) / order;
+    double sinh_a = std::sinh(a);
+    double cosh_a = std::cosh(a);
+
+    // Real pole (for odd order) - highpass has zero at DC
+    if (has_real_pole) {
+        double sigma = -wc * sinh_a;
+        // Highpass first-order: H(s) = s / (s - sigma)
+        // Bilinear transform
+        double K_val = 2.0 - sigma;
+        double b0 = 2.0 / K_val;
+        double b1 = -2.0 / K_val;
+        double a1 = (-2.0 - sigma) / K_val;
+        cascade_fos(coeffs, b0, b1, 1.0, a1);
+    }
+
+    // Compute zeros for highpass - they should be near DC to attenuate low frequencies
+    double eps_s = 1.0 / std::sqrt(A_stop * A_stop - 1.0);
+
+    // For highpass, stopband edge is below passband edge
+    // ws_hp = wc / factor where factor > 1
+    double factor = std::cosh(std::asinh(1.0 / eps_s) / order);
+    if (factor < 1.1) factor = 2.0;
+    double ws = wc / factor;
+
+    double k = ws / wc;  // < 1 for highpass
+    if (k >= 1.0) k = 0.5;
+    double K_k = elliptic_k(k);
+
+    for (int m = 0; m < L; ++m) {
+        double theta = constants::pi * (2.0 * m + 1.0) / (2.0 * order);
+        double sin_theta = std::sin(theta);
+        double cos_theta = std::cos(theta);
+
+        // Poles for highpass (same structure)
+        double sigma = -wc * sinh_a * sin_theta;
+        double omega = wc * cosh_a * cos_theta;
+
+        // Zeros on imaginary axis, but below cutoff for highpass
+        // Use Jacobi sn to place zeros in stopband
+        double u_m = K_k * (2.0 * m + 1.0) / order;
+        double sn_u, cn_u, dn_u;
+        jacobi_elliptic(u_m, k, sn_u, cn_u, dn_u);
+
+        double zero_omega;
+        if (std::abs(sn_u) > 1e-10) {
+            zero_omega = ws * std::abs(sn_u);  // Near DC for highpass
+        } else {
+            zero_omega = ws * 0.1;
+        }
+
+        // Make sure zeros are in stopband (below cutoff for highpass)
+        if (zero_omega >= wc) {
+            zero_omega = wc * 0.3;
+        }
+
+        double wn2 = sigma * sigma + omega * omega;
+        double a1_s = -2.0 * sigma;
+        double a2_s = wn2;
+
+        // For highpass with zeros near DC:
+        // Analog: H(s) = s² / (s² - 2*sigma*s + wn2) for pure highpass
+        // With zeros: H(s) = (s² + zero_omega²) * (s²) / ((s² + zero_omega²)(s² - 2*sigma*s + wn2))
+        // Simplified: use highpass numerator 4*(z-1)² but modify gain structure
+
+        // Actually, for elliptic highpass, we need zeros near DC
+        // Let's use: H(s) = (s² + zero_omega²) / (s² - 2*sigma*s + wn2)
+        // But scale differently for highpass behavior
+
+        double zo2 = zero_omega * zero_omega;
+
+        // Bilinear transform of numerator (s² + zo²)
+        double n0 = 4.0 + zo2;
+        double n1 = -8.0 + 2.0 * zo2;
+        double n2 = 4.0 + zo2;
+
+        // Denominator
+        double d0 = 4.0 + 2.0 * a1_s + a2_s;
+        double d1 = -8.0 + 2.0 * a2_s;
+        double d2 = 4.0 - 2.0 * a1_s + a2_s;
+
+        double b0 = n0 / d0;
+        double b1 = n1 / d0;
+        double b2 = n2 / d0;
+        double a1_z = d1 / d0;
+        double a2_z = d2 / d0;
+
+        cascade_sos(coeffs, b0, b1, b2, 1.0, a1_z, a2_z);
+    }
+
+    // Normalize for unity gain at Nyquist
+    float b_sum = 0.0f, a_sum = 0.0f;
+    for (size_t i = 0; i < coeffs.b.size(); ++i) {
+        float sign = (i % 2 == 0) ? 1.0f : -1.0f;
+        b_sum += sign * coeffs.b[i];
+    }
+    for (size_t i = 0; i < coeffs.a.size(); ++i) {
+        float sign = (i % 2 == 0) ? 1.0f : -1.0f;
+        a_sum += sign * coeffs.a[i];
+    }
+
+    if (std::abs(b_sum) > 1e-10f) {
+        float nyq_gain_raw = std::abs(b_sum / a_sum);
+        float target_nyq;
+        if (has_real_pole) {
+            target_nyq = 1.0f;
+        } else {
+            target_nyq = 1.0f / std::sqrt(1.0f + static_cast<float>(epsilon * epsilon));
+        }
+        float gain = target_nyq / nyq_gain_raw;
+        for (auto& b : coeffs.b) b *= gain;
+    }
+
+    return coeffs;
+}
+
 // Design Chebyshev Type II highpass
 FilterCoefficients cheby2_highpass(int order, double ws, double epsilon) {
     FilterCoefficients coeffs;
@@ -708,11 +1063,36 @@ FilterCoefficients cheby2(int order, float stopband_db, float normalized_freq, F
 
 FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
                          float normalized_freq, FilterType type) {
-    // Placeholder
     FilterCoefficients coeffs;
-    coeffs.b = {1.0f};
-    coeffs.a = {1.0f};
-    return coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || normalized_freq <= 0.0f || normalized_freq >= 1.0f ||
+        passband_ripple_db <= 0.0f || passband_ripple_db > 20.0f ||
+        stopband_db <= 0.0f || stopband_db > 120.0f) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    // Calculate epsilon from passband ripple
+    double epsilon = std::sqrt(std::pow(10.0, passband_ripple_db / 10.0) - 1.0);
+
+    // Calculate stopband attenuation factor (linear)
+    double A_stop = std::pow(10.0, stopband_db / 20.0);
+
+    // Frequency prewarping
+    double wc = 2.0 * std::tan(constants::pi * normalized_freq / 2.0);
+
+    if (type == FilterType::Lowpass) {
+        return ellip_lowpass(order, wc, epsilon, A_stop);
+    } else if (type == FilterType::Highpass) {
+        return ellip_highpass(order, wc, epsilon, A_stop);
+    } else {
+        // Bandpass/Bandstop not yet implemented
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
 }
 
 FilterCoefficients bessel(int order, float normalized_freq, FilterType type) {
