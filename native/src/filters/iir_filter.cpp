@@ -12,8 +12,20 @@ namespace spectra {
 void lfilter(const float* b, size_t b_len,
              const float* a, size_t a_len,
              const float* input, float* output, size_t len) {
+    if (len == 0 || b_len == 0 || a_len == 0) return;
+
     // Direct Form II Transposed
     const size_t order = std::max(b_len, a_len) - 1;
+
+    // Handle zero-order case (pure gain)
+    if (order == 0) {
+        const float gain = b[0] / a[0];
+        for (size_t n = 0; n < len; ++n) {
+            output[n] = gain * input[n];
+        }
+        return;
+    }
+
     std::vector<float> state(order, 0.0f);
 
     // Normalize by a[0]
@@ -40,7 +52,19 @@ void lfilter_zi(const float* b, size_t b_len,
                 const float* a, size_t a_len,
                 const float* input, float* output, size_t len,
                 const float* zi, float* zf) {
+    if (len == 0 || b_len == 0 || a_len == 0) return;
+
     const size_t order = std::max(b_len, a_len) - 1;
+
+    // Handle zero-order case (pure gain)
+    if (order == 0) {
+        const float gain = b[0] / a[0];
+        for (size_t n = 0; n < len; ++n) {
+            output[n] = gain * input[n];
+        }
+        return;
+    }
+
     std::vector<float> state(order);
 
     if (zi) {
@@ -116,8 +140,13 @@ void filtfilt(const float* b, size_t b_len,
 void lfilter_ic(const float* b, size_t b_len,
                 const float* a, size_t a_len,
                 float* zi) {
+    if (b_len == 0 || a_len == 0) return;
+
     // Compute initial conditions for step response
     const size_t order = std::max(b_len, a_len) - 1;
+
+    // Zero-order filter has no state
+    if (order == 0) return;
 
     // Sum of b coefficients
     float sum_b = 0.0f;
@@ -132,7 +161,7 @@ void lfilter_ic(const float* b, size_t b_len,
     }
 
     // DC gain
-    const float dc_gain = sum_b / sum_a;
+    const float dc_gain = (std::abs(sum_a) > 1e-10f) ? sum_b / sum_a : 0.0f;
 
     // Simple approximation: set all zi to dc_gain
     for (size_t i = 0; i < order; ++i) {
