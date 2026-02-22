@@ -113,6 +113,77 @@ SPECTRA_API void spectra_stft_destroy(SpectraSTFT stft) {
     delete static_cast<spectra::STFT*>(stft);
 }
 
+SPECTRA_API int spectra_stft_analyze(SpectraSTFT stft,
+                                      const float* input, int input_size,
+                                      float* output_real, float* output_imag,
+                                      int* num_frames) {
+    if (!stft) {
+        set_error(SPECTRA_ERROR_INVALID_HANDLE, "Invalid STFT handle");
+        return -1;
+    }
+    auto* s = static_cast<spectra::STFT*>(stft);
+    size_t frames;
+
+    // Allocate temporary Complex array
+    const size_t spectrum_size = s->spectrum_size();
+    const size_t max_frames = 100;  // Reasonable upper bound
+    std::vector<spectra::Complex> temp_output(max_frames * spectrum_size);
+
+    s->analyze(input, input_size, temp_output.data(), &frames);
+    *num_frames = static_cast<int>(frames);
+
+    // Convert Complex to separate real/imag arrays
+    for (size_t i = 0; i < frames * spectrum_size; ++i) {
+        output_real[i] = temp_output[i].real;
+        output_imag[i] = temp_output[i].imag;
+    }
+
+    return 0;
+}
+
+SPECTRA_API int spectra_stft_num_frames(int input_size, int fft_size, int hop_size) {
+    // Same calculation as STFT::calc_num_frames
+    if (input_size < fft_size) return 0;
+    return 1 + (input_size - fft_size) / hop_size;
+}
+
+SPECTRA_API int spectra_stft_push_samples(SpectraSTFT stft, const float* samples, int count) {
+    if (!stft) {
+        set_error(SPECTRA_ERROR_INVALID_HANDLE, "Invalid STFT handle");
+        return -1;
+    }
+    static_cast<spectra::STFT*>(stft)->push_samples(samples, count);
+    return 0;
+}
+
+SPECTRA_API int spectra_stft_pop_frame(SpectraSTFT stft, float* real, float* imag) {
+    if (!stft) {
+        set_error(SPECTRA_ERROR_INVALID_HANDLE, "Invalid STFT handle");
+        return -1;
+    }
+
+    auto* s = static_cast<spectra::STFT*>(stft);
+    const size_t spectrum_size = s->spectrum_size();
+    std::vector<spectra::Complex> temp_frame(spectrum_size);
+
+    bool result = s->pop_frame(temp_frame.data());
+
+    if (result) {
+        // Convert Complex to separate real/imag arrays
+        for (size_t i = 0; i < spectrum_size; ++i) {
+            real[i] = temp_frame[i].real;
+            imag[i] = temp_frame[i].imag;
+        }
+    }
+
+    return result ? 0 : -1;
+}
+
+SPECTRA_API int spectra_stft_frames_available(SpectraSTFT stft) {
+    if (!stft) return 0;
+    return static_cast<int>(static_cast<spectra::STFT*>(stft)->frames_available());
+}
+
 // Streaming filter
 SPECTRA_API SpectraStreamingFilter spectra_streaming_filter_create(
     const float* b, int b_len,
@@ -162,6 +233,42 @@ SPECTRA_API int spectra_butter(int order, float normalized_freq, SpectraFilterTy
     return 0;
 }
 
+SPECTRA_API int spectra_cheby1(int order, float ripple_db, float normalized_freq,
+                                SpectraFilterType type,
+                                float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::cheby1(order, ripple_db, normalized_freq,
+                                   static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
+SPECTRA_API int spectra_cheby2(int order, float stopband_db, float normalized_freq,
+                                SpectraFilterType type,
+                                float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::cheby2(order, stopband_db, normalized_freq,
+                                   static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
+SPECTRA_API int spectra_ellip(int order, float passband_ripple_db, float stopband_db,
+                               float normalized_freq, SpectraFilterType type,
+                               float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::ellip(order, passband_ripple_db, stopband_db, normalized_freq,
+                                  static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
 SPECTRA_API int spectra_iir_coeff_size(int order) {
     return spectra::iir_coeff_size(order);
 }
@@ -192,6 +299,31 @@ SPECTRA_API int spectra_xcorr(const float* x, int x_len,
 
 SPECTRA_API int spectra_xcorr_output_size(int x_len, int y_len) {
     return static_cast<int>(spectra::xcorr_output_size(x_len, y_len));
+}
+
+// Power Spectral Density
+SPECTRA_API int spectra_pwelch(const float* input, int len,
+                                const SpectraPWelchConfig* config,
+                                float sample_rate,
+                                float* psd, float* frequencies, int* output_len) {
+    spectra::WelchConfig cfg;
+    cfg.segment_size = config->segment_size;
+    cfg.overlap = config->overlap;
+    cfg.window = static_cast<spectra::WindowType>(config->window);
+    cfg.onesided = config->onesided != 0;
+    cfg.detrend = false;
+
+    size_t out_len;
+    spectra::pwelch(input, len, cfg, sample_rate, psd, frequencies, &out_len);
+    *output_len = static_cast<int>(out_len);
+    return 0;
+}
+
+SPECTRA_API int spectra_pwelch_output_size(const SpectraPWelchConfig* config) {
+    spectra::WelchConfig cfg;
+    cfg.segment_size = config->segment_size;
+    cfg.onesided = config->onesided != 0;
+    return static_cast<int>(spectra::pwelch_output_size(cfg));
 }
 
 // Hilbert

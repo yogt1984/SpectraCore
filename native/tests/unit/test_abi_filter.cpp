@@ -82,7 +82,87 @@ TEST_F(ABIFilterTest, ButterBandpass) {
     }
 }
 
-// Note: Chebyshev and Elliptic filter ABI functions are not yet implemented
+// ============================================================================
+// Chebyshev Type 1 Filter Design
+// ============================================================================
+
+TEST_F(ABIFilterTest, Cheby1Lowpass) {
+    const int order = 4;
+    const float ripple_db = 1.0f;
+    int max_size = spectra_iir_coeff_size(order);
+
+    std::vector<float> b(max_size);
+    std::vector<float> a(max_size);
+    int b_len, a_len;
+
+    int result = spectra_cheby1(order, ripple_db, 0.3f, SPECTRA_FILTER_LOWPASS,
+                                 b.data(), &b_len, a.data(), &a_len);
+    EXPECT_EQ(result, SPECTRA_OK);
+    EXPECT_GT(b_len, 0);
+    EXPECT_GT(a_len, 0);
+
+    // Check no NaN
+    for (int i = 0; i < b_len; ++i) {
+        EXPECT_FALSE(std::isnan(b[i]));
+    }
+    for (int i = 0; i < a_len; ++i) {
+        EXPECT_FALSE(std::isnan(a[i]));
+    }
+}
+
+TEST_F(ABIFilterTest, Cheby1Highpass) {
+    const int order = 3;
+    const float ripple_db = 0.5f;
+    int max_size = spectra_iir_coeff_size(order);
+
+    std::vector<float> b(max_size);
+    std::vector<float> a(max_size);
+    int b_len, a_len;
+
+    int result = spectra_cheby1(order, ripple_db, 0.25f, SPECTRA_FILTER_HIGHPASS,
+                                 b.data(), &b_len, a.data(), &a_len);
+    EXPECT_EQ(result, SPECTRA_OK);
+}
+
+// ============================================================================
+// Chebyshev Type 2 Filter Design
+// ============================================================================
+
+TEST_F(ABIFilterTest, Cheby2Lowpass) {
+    const int order = 4;
+    const float stopband_db = 40.0f;
+    int max_size = spectra_iir_coeff_size(order);
+
+    std::vector<float> b(max_size);
+    std::vector<float> a(max_size);
+    int b_len, a_len;
+
+    int result = spectra_cheby2(order, stopband_db, 0.3f, SPECTRA_FILTER_LOWPASS,
+                                 b.data(), &b_len, a.data(), &a_len);
+    EXPECT_EQ(result, SPECTRA_OK);
+    EXPECT_GT(b_len, 0);
+}
+
+// ============================================================================
+// Elliptic Filter Design
+// ============================================================================
+
+TEST_F(ABIFilterTest, EllipticLowpass) {
+    const int order = 4;
+    const float passband_ripple = 1.0f;
+    const float stopband_db = 40.0f;
+    int max_size = spectra_iir_coeff_size(order);
+
+    std::vector<float> b(max_size);
+    std::vector<float> a(max_size);
+    int b_len, a_len;
+
+    int result = spectra_ellip(order, passband_ripple, stopband_db, 0.3f,
+                                SPECTRA_FILTER_LOWPASS,
+                                b.data(), &b_len, a.data(), &a_len);
+    EXPECT_EQ(result, SPECTRA_OK);
+    EXPECT_GT(b_len, 0);
+}
 
 // ============================================================================
 // Streaming Filter

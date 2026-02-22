@@ -70,7 +70,100 @@ TEST_F(ABIAnalysisTest, XcorrOutputSize) {
     EXPECT_EQ(size, 149);  // x_len + y_len - 1
 }
 
-// Note: pwelch ABI functions are not yet implemented
+// ============================================================================
+// Power Spectral Density (pwelch)
+// ============================================================================
+
+TEST_F(ABIAnalysisTest, PwelchBasic) {
+    const int input_len = 1024;
+    std::vector<float> input(input_len);
+
+    // Generate white noise-like signal
+    for (int i = 0; i < input_len; ++i) {
+        input[i] = std::sin(i * 0.1f) + std::cos(i * 0.3f);
+    }
+
+    SpectraPWelchConfig config;
+    config.segment_size = 256;
+    config.overlap = 128;
+    config.window = SPECTRA_WINDOW_HANN;
+    config.onesided = 1;
+
+    int output_size = spectra_pwelch_output_size(&config);
+    EXPECT_GT(output_size, 0);
+
+    std::vector<float> psd(output_size);
+    std::vector<float> freq(output_size);
+    int actual_len;
+
+    int result = spectra_pwelch(input.data(), input_len, &config, 44100.0f,
+                                 psd.data(), freq.data(), &actual_len);
+    EXPECT_EQ(result, SPECTRA_OK);
+    EXPECT_GT(actual_len, 0);
+
+    // PSD should be non-negative
+    for (int i = 0; i < actual_len; ++i) {
+        EXPECT_GE(psd[i], 0.0f);
+        EXPECT_FALSE(std::isnan(psd[i]));
+    }
+
+    // Frequencies should be monotonic
+    for (int i = 1; i < actual_len; ++i) {
+        EXPECT_GT(freq[i], freq[i - 1]);
+    }
+}
+
+TEST_F(ABIAnalysisTest, PwelchSineWave) {
+    const int input_len = 4096;
+    const float sample_rate = 44100.0f;
+    const float tone_freq = 1000.0f;
+
+    std::vector<float> input(input_len);
+    for (int i = 0; i < input_len; ++i) {
+        input[i] = std::sin(2.0f * PI * tone_freq * i / sample_rate);
+    }
+
+    SpectraPWelchConfig config;
+    config.segment_size = 512;
+    config.overlap = 256;
+    config.window = SPECTRA_WINDOW_HANN;
+    config.onesided = 1;
+
+    int output_size = spectra_pwelch_output_size(&config);
+    std::vector<float> psd(output_size);
+    std::vector<float> freq(output_size);
+    int actual_len;
+
+    spectra_pwelch(input.data(), input_len, &config, sample_rate,
+                   psd.data(), freq.data(), &actual_len);
+
+    // Find peak
+    int peak_idx = 0;
+    float peak_val = psd[0];
+    for (int i = 1; i < actual_len; ++i) {
+        if (psd[i] > peak_val) {
+            peak_val = psd[i];
+            peak_idx = i;
+        }
+    }
+
+    // Peak should be near tone frequency
+    float peak_freq = freq[peak_idx];
+    EXPECT_NEAR(peak_freq, tone_freq, sample_rate / config.segment_size);
+}
+
+TEST_F(ABIAnalysisTest, PwelchOutputSize) {
+    SpectraPWelchConfig config;
+    config.segment_size = 256;
+    config.onesided = 1;
+
+    int size = spectra_pwelch_output_size(&config);
+    EXPECT_EQ(size, 129);  // N/2 + 1
+
+    config.onesided = 0;
+    size = spectra_pwelch_output_size(&config);
+    EXPECT_EQ(size, 256);
+}
 
 // ============================================================================
 // Hilbert Transform

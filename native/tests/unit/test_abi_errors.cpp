@@ -74,7 +74,12 @@ TEST_F(ABIErrorTest, InvalidOnsetHandle) {
     EXPECT_NE(result, SPECTRA_OK);
 }
 
-// Note: spectra_stft_pop_frame is not yet implemented
+TEST_F(ABIErrorTest, InvalidSTFTHandle) {
+    std::vector<float> real(129), imag(129);
+
+    int result = spectra_stft_pop_frame(nullptr, real.data(), imag.data());
+    EXPECT_NE(result, SPECTRA_OK);
+}
 
 // ============================================================================
 // Error Recovery

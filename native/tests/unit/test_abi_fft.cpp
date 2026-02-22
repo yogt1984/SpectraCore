@@ -311,6 +311,87 @@ TEST_F(ABIFFTTest, STFTCreateDestroy) {
     spectra_stft_destroy(stft);
 }
 
+TEST_F(ABIFFTTest, STFTNumFrames) {
+    int num_frames = spectra_stft_num_frames(1024, 256, 128);
+    EXPECT_GT(num_frames, 0);
+}
+
+TEST_F(ABIFFTTest, STFTAnalyze) {
+    SpectraSTFTConfig config;
+    config.fft_size = 256;
+    config.hop_size = 128;
+    config.window = SPECTRA_WINDOW_HANN;
+    config.center = 0;
+
+    SpectraSTFT stft = spectra_stft_create(&config);
+    ASSERT_NE(stft, nullptr);
+
+    const int input_size = 1024;
+    std::vector<float> input(input_size);
+
+    // Generate test signal
+    for (int i = 0; i < input_size; ++i) {
+        input[i] = std::sin(2.0f * PI * 10 * i / input_size);
+    }
+
+    int expected_frames = spectra_stft_num_frames(input_size, 256, 128);
+    int spectrum_size = 256 / 2 + 1;
+
+    std::vector<float> output_real(expected_frames * spectrum_size);
+    std::vector<float> output_imag(expected_frames * spectrum_size);
+    int actual_frames;
+
+    int result = spectra_stft_analyze(stft, input.data(), input_size,
+                                       output_real.data(), output_imag.data(),
+                                       &actual_frames);
+    EXPECT_EQ(result, SPECTRA_OK);
+    EXPECT_GT(actual_frames, 0);
+
+    // Check for valid output
+    for (int i = 0; i < actual_frames * spectrum_size; ++i) {
+        EXPECT_FALSE(std::isnan(output_real[i]));
+        EXPECT_FALSE(std::isnan(output_imag[i]));
+    }
+
+    spectra_stft_destroy(stft);
+}
+
+TEST_F(ABIFFTTest, STFTStreaming) {
+    SpectraSTFTConfig config;
+    config.fft_size = 256;
+    config.hop_size = 128;
+    config.window = SPECTRA_WINDOW_HANN;
+    config.center = 0;
+
+    SpectraSTFT stft = spectra_stft_create(&config);
+    ASSERT_NE(stft, nullptr);
+
+    std::vector<float> samples(512);
+    for (int i = 0; i < 512; ++i) {
+        samples[i] = std::sin(2.0f * PI * 5 * i / 512);
+    }
+
+    // Push samples
+    int result = spectra_stft_push_samples(stft, samples.data(), 512);
+    EXPECT_EQ(result, SPECTRA_OK);
+
+    // Check frames available
+    int available = spectra_stft_frames_available(stft);
+    EXPECT_GE(available, 0);
+
+    // Pop frames if available
+    if (available > 0) {
+        int spectrum_size = 256 / 2 + 1;
+        std::vector<float> real_out(spectrum_size);
+        std::vector<float> imag_out(spectrum_size);
+
+        result = spectra_stft_pop_frame(stft, real_out.data(), imag_out.data());
+        EXPECT_EQ(result, SPECTRA_OK);
+    }
+
+    spectra_stft_destroy(stft);
+}
+
 // ============================================================================
 // Version Info
 // ============================================================================
