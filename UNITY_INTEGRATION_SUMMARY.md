@@ -534,10 +534,16 @@ Function names and behavior match MATLAB equivalents:
 - ✅ Linux (x86_64) - Native library built and tested
 - ✅ Linux (x86_64) - P/Invoke bindings verified via standalone test
 
+### In Progress:
+- ⏳ Windows - UNITY-001 in progress (testing guide and automation scripts ready, awaiting Windows VM/machine)
+  - Windows DLL building via CI/CD (in progress)
+  - Comprehensive testing guide created (UNITY-001_WINDOWS_TESTING_GUIDE.md)
+  - Testing checklist created (UNITY-001_TESTING_CHECKLIST.md)
+  - Automation script created (test-windows.bat)
+
 ### Not Yet Tested:
-- ⏳ Windows - Requires Windows build and testing
-- ⏳ macOS - Requires macOS build and testing
-- ⏳ Unity Editor - Requires Unity Editor testing
+- ⏳ macOS - Requires macOS build and testing (UNITY-002)
+- ⏳ Unity Editor - Requires Unity Editor testing on each platform
 
 ### Unity Version:
 - Target: Unity 2021.3 or newer
@@ -613,10 +619,19 @@ using (var detector = new OnsetDetector(config, 44100f))
 
 According to TASKS.md:
 
-### UNITY-001: Test P/Invoke on Windows
-- Build native library for Windows (spectra.dll)
-- Run SpectraNativeTests in Unity Editor on Windows
-- Run standalone PInvokeTest.exe
+### UNITY-001: Test P/Invoke on Windows ⏳ **IN PROGRESS**
+- ✅ Created comprehensive testing guide (21-page guide with troubleshooting)
+- ✅ Created interactive testing checklist
+- ✅ Created Windows automation script (test-windows.bat)
+- ✅ Created completion report template
+- ⏳ Windows DLL building via CI/CD (currently in progress)
+- ⏳ Awaiting Windows machine/VM for actual testing:
+  - Run SpectraNativeTests in Unity Editor on Windows (36 tests)
+  - Run SpectraComponentTests in Unity Editor on Windows (35 tests)
+  - Run standalone PInvokeTest.exe (6 tests)
+  - Verify Signal Inspector tool on Windows
+  - Verify Filter Designer tool on Windows
+  - Performance benchmarking
 
 ### UNITY-002: Test P/Invoke on macOS
 - Build native library for macOS (libspectra.dylib)
