@@ -86,6 +86,52 @@ namespace Spectra
             int windowType);
 
         // ====================================================================
+        // STFT
+        // ====================================================================
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct STFTConfig
+        {
+            public int fftSize;
+            public int hopSize;
+            public int window;
+            public int center;
+        }
+
+        [DllImport(LibraryName)]
+        public static extern IntPtr spectra_stft_create(ref STFTConfig config);
+
+        [DllImport(LibraryName)]
+        public static extern void spectra_stft_destroy(IntPtr stft);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_stft_analyze(
+            IntPtr stft,
+            [In] float[] input,
+            int inputSize,
+            [Out] float[] outputReal,
+            [Out] float[] outputImag,
+            ref int numFrames);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_stft_num_frames(int inputSize, int fftSize, int hopSize);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_stft_push_samples(
+            IntPtr stft,
+            [In] float[] samples,
+            int count);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_stft_pop_frame(
+            IntPtr stft,
+            [Out] float[] real,
+            [Out] float[] imag);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_stft_frames_available(IntPtr stft);
+
+        // ====================================================================
         // Streaming Filter
         // ====================================================================
 
@@ -122,6 +168,40 @@ namespace Spectra
             ref int aLen);
 
         [DllImport(LibraryName)]
+        public static extern int spectra_cheby1(
+            int order,
+            float rippleDb,
+            float normalizedFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_cheby2(
+            int order,
+            float stopbandDb,
+            float normalizedFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_ellip(
+            int order,
+            float passbandRippleDb,
+            float stopbandDb,
+            float normalizedFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
         public static extern int spectra_iir_coeff_size(int order);
 
         // ====================================================================
@@ -145,6 +225,18 @@ namespace Spectra
             int len);
 
         // ====================================================================
+        // Filter Analysis
+        // ====================================================================
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_freqz(
+            [In] float[] b, int bLen,
+            [In] float[] a, int aLen,
+            [Out] float[] magnitude,
+            [Out] float[] phase,
+            int numPoints);
+
+        // ====================================================================
         // Correlation
         // ====================================================================
 
@@ -157,6 +249,32 @@ namespace Spectra
 
         [DllImport(LibraryName)]
         public static extern int spectra_xcorr_output_size(int xLen, int yLen);
+
+        // ====================================================================
+        // Power Spectral Density
+        // ====================================================================
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct PWelchConfig
+        {
+            public int segmentSize;
+            public int overlap;
+            public int window;
+            public int onesided;
+        }
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_pwelch(
+            [In] float[] input,
+            int len,
+            ref PWelchConfig config,
+            float sampleRate,
+            [Out] float[] psd,
+            [Out] float[] frequencies,
+            ref int outputLen);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_pwelch_output_size(ref PWelchConfig config);
 
         // ====================================================================
         // Hilbert

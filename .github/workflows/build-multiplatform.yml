@@ -1,0 +1,123 @@
+name: Multi-Platform Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Build Native Library
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Run Tests
+        run: |
+          cd native/build
+          ctest --output-on-failure
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: libspectra-linux
+          path: native/build/lib/libspectra.so
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v1
+
+      - name: Build Native Library
+        run: |
+          cd native
+          cmake -B build -G "Visual Studio 17 2022" -A x64
+          cmake --build build --config Release
+
+      - name: Run Tests
+        run: |
+          cd native/build
+          ctest -C Release --output-on-failure
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: spectra-windows
+          path: native/build/Release/spectra.dll
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          brew install cmake
+
+      - name: Build Native Library (Universal Binary)
+        run: |
+          cd native
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+          cmake --build build
+
+      - name: Run Tests
+        run: |
+          cd native/build
+          ctest --output-on-failure
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: libspectra-macos
+          path: native/build/lib/libspectra.dylib
+
+  package-unity:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download Linux Library
+        uses: actions/download-artifact@v3
+        with:
+          name: libspectra-linux
+          path: unity/Runtime/Plugins/Linux/x86_64/
+
+      - name: Download Windows Library
+        uses: actions/download-artifact@v3
+        with:
+          name: spectra-windows
+          path: unity/Runtime/Plugins/Windows/x86_64/
+
+      - name: Download macOS Library
+        uses: actions/download-artifact@v3
+        with:
+          name: libspectra-macos
+          path: unity/Runtime/Plugins/macOS/
+
+      - name: Create Unity Package
+        run: |
+          cd unity
+          tar -czf ../SpectraCore-Unity.tar.gz .
+
+      - name: Upload Unity Package
+        uses: actions/upload-artifact@v3
+        with:
+          name: SpectraCore-Unity-Package
+          path: SpectraCore-Unity.tar.gz

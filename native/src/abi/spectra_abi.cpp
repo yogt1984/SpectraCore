@@ -288,6 +288,30 @@ SPECTRA_API int spectra_filtfilt(const float* b, int b_len,
     return 0;
 }
 
+// Filter Analysis
+SPECTRA_API int spectra_freqz(const float* b, int b_len,
+                               const float* a, int a_len,
+                               float* magnitude, float* phase, int num_points) {
+    // Create filter coefficients structure
+    spectra::FilterCoefficients coeffs;
+    coeffs.b.assign(b, b + b_len);
+    coeffs.a.assign(a, a + a_len);
+
+    // Allocate temporary complex array for frequency response
+    std::vector<spectra::Complex> H(num_points);
+
+    // Compute frequency response
+    spectra::freqz(coeffs, H.data(), num_points);
+
+    // Convert to magnitude and phase
+    for (int i = 0; i < num_points; ++i) {
+        magnitude[i] = std::sqrt(H[i].real * H[i].real + H[i].imag * H[i].imag);
+        phase[i] = std::atan2(H[i].imag, H[i].real);
+    }
+
+    return 0;
+}
+
 // Correlation
 SPECTRA_API int spectra_xcorr(const float* x, int x_len,
                                const float* y, int y_len,

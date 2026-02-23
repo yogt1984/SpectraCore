@@ -167,6 +167,27 @@ SPECTRA_API int spectra_filtfilt(const float* b, int b_len,
                                   const float* input, float* output, int len);
 
 /* ============================================================================
+ * Filter Analysis
+ * ============================================================================ */
+
+/**
+ * @brief Compute frequency response of a filter
+ * Equivalent to MATLAB: [H, W] = freqz(b, a, nfft)
+ *
+ * @param b Numerator coefficients
+ * @param b_len Length of b array
+ * @param a Denominator coefficients
+ * @param a_len Length of a array
+ * @param magnitude Output magnitude response
+ * @param phase Output phase response (radians)
+ * @param num_points Number of frequency points
+ * @return 0 on success, negative on error
+ */
+SPECTRA_API int spectra_freqz(const float* b, int b_len,
+                               const float* a, int a_len,
+                               float* magnitude, float* phase, int num_points);
+
+/* ============================================================================
  * Correlation
  * ============================================================================ */
 

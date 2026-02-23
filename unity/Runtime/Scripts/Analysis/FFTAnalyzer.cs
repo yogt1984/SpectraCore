@@ -92,6 +92,25 @@ namespace Spectra
         }
 
         /// <summary>
+        /// Compute forward FFT and return complex spectrum.
+        /// </summary>
+        public (float[] real, float[] imag) Forward(float[] input)
+        {
+            ThrowIfDisposed();
+
+            if (input.Length != size)
+                throw new ArgumentException($"Input length must be {size}");
+
+            float[] real = new float[size];
+            float[] imag = new float[size];
+
+            SpectraNative.spectra_fft_forward(
+                handle.DangerousGetHandle(), input, real, imag);
+
+            return (real, imag);
+        }
+
+        /// <summary>
         /// Compute forward FFT.
         /// </summary>
         public void Forward(float[] input, float[] outputReal, float[] outputImag)
