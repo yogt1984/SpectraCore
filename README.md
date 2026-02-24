@@ -2,9 +2,10 @@
 
 **Professional-grade DSP library for Unity with comprehensive C# bindings and editor tools**
 
-[![CI/CD](https://github.com/yogt1984/SpectraCore/workflows/Multi-Platform%20Build/badge.svg)](https://github.com/yogt1984/SpectraCore/actions)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Unity](https://img.shields.io/badge/unity-2021.3+-green.svg)](https://unity.com)
+[![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/yogt1984/SpectraCore/releases)
+[![CI/CD](https://github.com/yogt1984/SpectraCore/workflows/CI/badge.svg)](https://github.com/yogt1984/SpectraCore/actions)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Unity](https://img.shields.io/badge/unity-2021.3+-orange.svg)](https://unity.com)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)](#platform-support)
 
 ---
@@ -53,12 +54,16 @@ SpectraCore is a high-performance, cross-platform digital signal processing (DSP
 
 ### Installation
 
-1. **Download the latest release** or build from source
-2. **Copy to Unity project:**
-   ```bash
-   cp -r unity/* /path/to/YourUnityProject/Assets/SpectraCore/
-   ```
-3. **Import native libraries** from CI/CD artifacts or build locally
+**Unity Package Manager (Recommended):**
+```
+Window → Package Manager → + → Add package from git URL
+https://github.com/yogt1984/SpectraCore.git
+```
+
+**Or download the latest release:**
+- [Releases Page](https://github.com/yogt1984/SpectraCore/releases/tag/v1.0.0)
+
+**For detailed installation instructions**, see [INSTALLATION.md](INSTALLATION.md)
 
 ### First Example
 

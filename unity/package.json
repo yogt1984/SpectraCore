@@ -1,8 +1,8 @@
 {
   "name": "com.spectracore.dsp",
-  "version": "0.1.0",
-  "displayName": "SpectraCore DSP",
-  "description": "Native C++ DSP library for Unity - MATLAB-equivalent signal processing toolkit",
+  "version": "1.0.0",
+  "displayName": "SpectraCore DSP Library",
+  "description": "High-performance Digital Signal Processing library for Unity with MATLAB-compatible APIs. Includes FFT, STFT, filter design (Butterworth, Chebyshev, Elliptic), spectral analysis, onset detection, and comprehensive editor tools.",
   "unity": "2021.3",
   "unityRelease": "0f1",
   "documentationUrl": "https://github.com/yogt1984/SpectraCore",
@@ -10,16 +10,58 @@
   "licensesUrl": "https://github.com/yogt1984/SpectraCore/blob/main/LICENSE",
   "keywords": [
     "dsp",
-    "signal-processing",
-    "fft",
     "audio",
+    "fft",
+    "stft",
     "filter",
+    "signal-processing",
+    "spectral-analysis",
+    "onset-detection",
     "matlab",
+    "spectrum",
+    "frequency",
+    "visualizer",
     "native"
   ],
   "author": {
-    "name": "SpectraCore",
+    "name": "SpectraCore Team",
+    "email": "yogt1984@users.noreply.github.com",
     "url": "https://github.com/yogt1984/SpectraCore"
   },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yogt1984/SpectraCore.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yogt1984/SpectraCore/issues"
+  },
+  "samples": [
+    {
+      "displayName": "Audio Visualizer",
+      "description": "3D spectrum visualization with real-time FFT and waveform display",
+      "path": "Samples~/AudioVisualizer"
+    },
+    {
+      "displayName": "Filter Playground",
+      "description": "Interactive filter design with real-time Bode plots and audio preview",
+      "path": "Samples~/FilterPlayground"
+    },
+    {
+      "displayName": "Beat-Synced Game",
+      "description": "Rhythm game mechanics with onset detection and score system",
+      "path": "Samples~/BeatSyncedGame"
+    },
+    {
+      "displayName": "Audio Effects Studio",
+      "description": "Multi-effect processor with EQ, distortion, and delay",
+      "path": "Samples~/AudioEffectsStudio"
+    },
+    {
+      "displayName": "Spectrogram Analyzer",
+      "description": "Time-frequency visualization with CSV export capabilities",
+      "path": "Samples~/SpectrogramAnalyzer"
+    }
+  ],
   "dependencies": {}
 }
