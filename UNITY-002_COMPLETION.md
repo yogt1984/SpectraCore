@@ -152,7 +152,8 @@ Manual Unity testing available via testing infrastructure if needed:
 
 ---
 
-**Validated by:** CI/CD (GitHub Actions)
+**Validated by:** GitHub Actions CI Workflow
+**Workflow:** CI (build-native job)
 **Date:** 2026-02-24
 **Status:** Production Ready ✅
 

@@ -42,7 +42,7 @@ The SpectraCore project uses GitHub Actions to automatically build native librar
 
 ### Workflow File
 
-**Location:** `.github/workflows/build-multiplatform.yml`
+**Location:** `.github/workflows/ci.yml`
 
 **Triggers:**
 - Push to `main` branch
@@ -75,7 +75,7 @@ jobs:
    SpectraCore/
    ├── .github/
    │   └── workflows/
-   │       └── build-multiplatform.yml
+   │       └── ci.yml
    ├── native/
    │   ├── CMakeLists.txt
    │   ├── src/
@@ -98,12 +98,12 @@ jobs:
 
 ```bash
 cd /home/onat/SpectraCore
-ls -la .github/workflows/build-multiplatform.yml
+ls -la .github/workflows/ci.yml
 ```
 
 **Expected output:**
 ```
--rw-rw-r-- 1 user user 3500 Feb 23 10:00 .github/workflows/build-multiplatform.yml
+-rw-rw-r-- 1 user user 3500 Feb 23 10:00 .github/workflows/ci.yml
 ```
 
 ---
@@ -119,7 +119,7 @@ git status
 **Stage workflow file:**
 
 ```bash
-git add .github/workflows/build-multiplatform.yml
+git add .github/workflows/ci.yml
 ```
 
 **Commit:**
@@ -152,16 +152,21 @@ git push origin main
 
 **3. View Workflow Run:**
 - You should see a new workflow run starting
-- Name: "Multi-Platform Build"
+- Name: "CI"
 - Triggered by: Your commit
 
 **4. Watch Progress:**
 - Click on the workflow run
-- See all 4 jobs running in parallel:
-  - build-linux (green check when complete)
-  - build-windows (green check when complete)
-  - build-macos (green check when complete)
-  - package-unity (waits for all, then runs)
+- See multiple jobs running in parallel:
+  - build-native (ubuntu-latest)
+  - build-native (windows-latest)
+  - build-native (macos-latest)
+  - test-sanitizers
+  - static-analysis
+  - build-android (optional)
+  - build-ios (optional)
+  - unity-tests (optional, requires UNITY_LICENSE secret)
+  - code-coverage (optional)
 
 **Typical Timeline:**
 ```
@@ -169,7 +174,7 @@ git push origin main
 2:00 - Linux build completes
 5:00 - Windows build completes
 8:00 - macOS build completes
-10:00 - Package job completes
+10:00 - All jobs complete
 ```
 
 ---
@@ -183,10 +188,11 @@ git push origin main
 2. **Find "Artifacts" section:**
    ```
    Artifacts
-   ├── libspectra-linux (142 KB)
-   ├── spectra-windows (98 KB)
-   ├── libspectra-macos (256 KB)
-   └── SpectraCore-Unity-Package (512 KB)
+   ├── native-ubuntu-latest (142 KB)
+   ├── native-windows-latest (98 KB)
+   ├── native-macos-latest (256 KB)
+   ├── native-android (optional)
+   └── native-ios (optional)
    ```
 
 3. **Download artifacts:**
@@ -195,8 +201,8 @@ git push origin main
 
 4. **Extract and verify:**
    ```bash
-   unzip libspectra-linux.zip
-   file libspectra.so
+   unzip native-ubuntu-latest.zip
+   file lib/libspectra.so
    # Expected: ELF 64-bit LSB shared object, x86-64
    ```
 
@@ -263,10 +269,12 @@ git push origin main
 
 5. **Upload Artifact**
    ```yaml
-   - uses: actions/upload-artifact@v3
+   - uses: actions/upload-artifact@v4
      with:
-       name: libspectra-linux
-       path: native/build/lib/libspectra.so
+       name: native-${{ matrix.os }}
+       path: |
+         native/build/lib/*
+         native/build/bin/*
    ```
    Makes library downloadable
 
@@ -399,7 +407,7 @@ git push origin main
 **Check workflow file location:**
 ```bash
 ls -la .github/workflows/
-# Should show: build-multiplatform.yml
+# Should show: ci.yml
 ```
 
 **Enable GitHub Actions:**
@@ -522,15 +530,16 @@ If using older macOS runner, build x86_64 only:
 
 ---
 
-### Issue 5: Package Job Fails
+### Issue 5: Artifact Upload Fails
 
-**Error:** `Artifact not found: libspectra-linux`
+**Error:** `Artifact not found: native-ubuntu-latest`
 
-**Cause:** Previous job failed
+**Cause:** Build job failed or artifact path incorrect
 
 **Solution:**
-1. Check which job failed (Linux, Windows, or macOS)
-2. Fix that job first
+1. Check which build-native job failed (ubuntu-latest, windows-latest, or macos-latest)
+2. Verify artifact paths in workflow match actual build output
+3. Fix the failing job first
 3. Package job will succeed once all dependencies pass
 
 ---
@@ -686,16 +695,15 @@ release:
 
   steps:
     - name: Download Artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          libspectra-linux.zip
-          spectra-windows.zip
-          libspectra-macos.zip
-          SpectraCore-Unity-Package.zip
+          native-ubuntu-latest.zip
+          native-windows-latest.zip
+          native-macos-latest.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -917,7 +925,7 @@ The CI/CD workflow provides:
 
 ```bash
 # Check workflow syntax
-yamllint .github/workflows/build-multiplatform.yml
+yamllint .github/workflows/ci.yml
 
 # Local build test
 cd native && cmake -B build && cmake --build build
@@ -929,7 +937,7 @@ gh run list  # GitHub CLI
 gh run download RUN_ID  # GitHub CLI
 
 # Trigger manual workflow
-gh workflow run "Multi-Platform Build"  # If workflow_dispatch enabled
+gh workflow run "CI"  # If workflow_dispatch enabled
 ```
 
 ### Useful GitHub CLI Commands

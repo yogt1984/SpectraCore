@@ -100,43 +100,47 @@ All platform testing and validation complete via CI/CD:
 
 ## CI/CD Workflow Status
 
-**Workflow:** Multi-Platform Build
+**Workflow:** CI (Main CI/CD Pipeline)
 
-**Triggered:** Automatically on every commit to main
+**Triggered:** Automatically on every commit to main/develop
 
 **Jobs:**
-1. **build-linux** (Ubuntu latest)
+1. **build-native (Linux)** (Ubuntu latest)
    - Compiler: GCC
    - Output: libspectra.so
    - Tests: 68 tests
    - Duration: ~5 min
 
-2. **build-windows** (Windows latest)
-   - Compiler: MSVC 2022
+2. **build-native (Windows)** (Windows latest)
+   - Compiler: MSVC
    - Output: spectra.dll
    - Tests: 68 tests
    - Duration: ~7 min
 
-3. **build-macos** (macOS latest)
+3. **build-native (macOS)** (macOS latest)
    - Compiler: Clang
-   - Output: libspectra.dylib (universal binary)
+   - Output: libspectra.dylib (universal binary: x86_64 + arm64)
    - Tests: 68 tests
    - Duration: ~8 min
 
-4. **package-unity** (Ubuntu latest)
-   - Combines all platform libraries
-   - Creates Unity package
-   - Duration: ~2 min
+4. **Additional Jobs:**
+   - test-sanitizers (Ubuntu, ASan/UBSan)
+   - static-analysis (clang-tidy)
+   - build-android (ARM64)
+   - build-ios (ARM64)
+   - unity-tests (Unity Test Runner)
+   - code-coverage (Codecov integration)
 
 **Total Duration:** 10-15 minutes (parallel execution)
 
 **Artifacts Generated:**
-- `libspectra-linux` - Linux .so file
-- `spectra-windows` - Windows .dll file
-- `libspectra-macos` - macOS .dylib (universal)
-- `SpectraCore-Unity-Package` - Complete Unity package
+- `native-ubuntu-latest` - Linux .so file
+- `native-windows-latest` - Windows .dll file
+- `native-macos-latest` - macOS .dylib (universal)
+- `native-android` - Android .so file
+- `native-ios` - iOS .a file
 
-**Tests Run:** 204 total (68 per platform × 3 platforms)
+**Tests Run:** 204 total (68 per platform × 3 platforms) + sanitizers + static analysis
 
 **Check Status:** https://github.com/yogt1984/SpectraCore/actions
 

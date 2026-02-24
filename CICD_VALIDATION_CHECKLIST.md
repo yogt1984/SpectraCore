@@ -10,7 +10,7 @@
 
 Navigate to: **https://github.com/yogt1984/SpectraCore/actions**
 
-Look for the workflow run titled: **"Multi-Platform Build"** (or your commit message)
+Look for the workflow run titled: **"CI"** (or your commit message)
 
 ### Visual Check
 
@@ -23,52 +23,48 @@ Look for the workflow run titled: **"Multi-Platform Build"** (or your commit mes
 
 Click on the workflow run to see job details.
 
-### Expected Jobs (4 total)
+### Expected Jobs (Matrix Build)
 
-**Job 1: build-linux**
+**Job: Build Native (ubuntu-latest)**
 - [ ] Status: ✅ Success
 - [ ] Duration: ~5-7 minutes
 - [ ] Steps completed:
   - [ ] Checkout code
-  - [ ] Install dependencies
-  - [ ] Build Native Library
-  - [ ] Run Tests
-  - [ ] Upload Artifact
+  - [ ] Configure CMake
+  - [ ] Build
+  - [ ] Run Tests (68 tests)
+  - [ ] Upload Artifact (native-ubuntu-latest)
 
-**Job 2: build-windows**
+**Job: Build Native (windows-latest)**
 - [ ] Status: ✅ Success
 - [ ] Duration: ~6-8 minutes
 - [ ] Steps completed:
   - [ ] Checkout code
-  - [ ] Setup MSVC
-  - [ ] Build Native Library
-  - [ ] Run Tests
-  - [ ] Upload Artifact
+  - [ ] Configure CMake
+  - [ ] Build
+  - [ ] Run Tests (68 tests)
+  - [ ] Upload Artifact (native-windows-latest)
 
-**Job 3: build-macos**
+**Job: Build Native (macos-latest)**
 - [ ] Status: ✅ Success
 - [ ] Duration: ~7-9 minutes
 - [ ] Steps completed:
   - [ ] Checkout code
-  - [ ] Install dependencies
-  - [ ] Build Native Library (Universal)
-  - [ ] Run Tests
-  - [ ] Upload Artifact
+  - [ ] Configure CMake (Universal Binary)
+  - [ ] Build
+  - [ ] Run Tests (68 tests)
+  - [ ] Upload Artifact (native-macos-latest)
 
-**Job 4: package-unity**
-- [ ] Status: ✅ Success
-- [ ] Duration: ~2-3 minutes
-- [ ] Depends on: Jobs 1-3 complete
-- [ ] Steps completed:
-  - [ ] Checkout code
-  - [ ] Download Linux library
-  - [ ] Download Windows library
-  - [ ] Download macOS library
-  - [ ] Create Unity Package
-  - [ ] Upload Unity Package
+**Optional Jobs** (may run in parallel):
+- [ ] test-sanitizers: ASan/UBSan validation
+- [ ] static-analysis: clang-tidy checks
+- [ ] build-android: Android ARM64 build
+- [ ] build-ios: iOS ARM64 build
+- [ ] unity-tests: Unity Test Runner
+- [ ] code-coverage: Codecov reporting
 
 ### Overall Status
-- [ ] All 4 jobs: ✅ Success
+- [ ] All 3 build-native jobs: ✅ Success
 - [ ] Total duration: ~10-15 minutes
 - [ ] No errors or warnings
 
@@ -121,33 +117,38 @@ Scroll to the bottom of the workflow run page.
 
 ### Artifacts Section
 
-**Expected artifacts (4 total):**
+**Expected artifacts (3 main + 2 optional):**
 
-1. **libspectra-linux**
+1. **native-ubuntu-latest**
    - [ ] Present
    - [ ] Size: ~140 KB (acceptable: 100-200 KB)
+   - [ ] Contains: lib/libspectra.so
    - [ ] Click to download (downloads as .zip)
 
-2. **spectra-windows**
+2. **native-windows-latest**
    - [ ] Present
    - [ ] Size: ~100 KB (acceptable: 80-150 KB)
+   - [ ] Contains: bin/spectra.dll or lib/spectra.dll
    - [ ] Click to download (downloads as .zip)
 
-3. **libspectra-macos**
+3. **native-macos-latest**
    - [ ] Present
    - [ ] Size: ~250 KB (acceptable: 200-300 KB)
-   - [ ] Universal binary
+   - [ ] Universal binary (x86_64 + arm64)
+   - [ ] Contains: lib/libspectra.dylib
    - [ ] Click to download (downloads as .zip)
 
-4. **SpectraCore-Unity-Package**
+4. **native-android** (optional)
    - [ ] Present
-   - [ ] Size: ~500 KB (acceptable: 400-600 KB)
-   - [ ] Contains all 3 platform libraries
-   - [ ] Click to download (downloads as .zip)
+   - [ ] ARM64-v8a library
+
+5. **native-ios** (optional)
+   - [ ] Present
+   - [ ] ARM64 static library
 
 ### Artifact Retention
 - [ ] Artifacts available for 90 days
-- [ ] All 4 artifacts downloadable
+- [ ] All 3 main artifacts downloadable
 
 ---
 
@@ -159,18 +160,17 @@ If you want to verify the artifacts locally:
 ```bash
 cd ~/Downloads
 # Extract each artifact
-unzip libspectra-linux.zip
-unzip spectra-windows.zip
-unzip libspectra-macos.zip
-unzip SpectraCore-Unity-Package.zip
+unzip native-ubuntu-latest.zip
+unzip native-windows-latest.zip
+unzip native-macos-latest.zip
 ```
 
 ### Verify Linux Library
 ```bash
-file libspectra.so
+file lib/libspectra.so
 # Expected: ELF 64-bit LSB shared object, x86-64
 
-ls -lh libspectra.so
+ls -lh lib/libspectra.so
 # Expected: ~140 KB
 ```
 - [ ] Valid ELF file
@@ -179,10 +179,10 @@ ls -lh libspectra.so
 
 ### Verify Windows Library
 ```bash
-file spectra.dll
+file bin/spectra.dll  # or lib/spectra.dll
 # Expected: PE32+ executable (DLL) (console) x86-64
 
-ls -lh spectra.dll
+ls -lh bin/spectra.dll
 # Expected: ~100 KB
 ```
 - [ ] Valid PE32+ file
@@ -191,30 +191,18 @@ ls -lh spectra.dll
 
 ### Verify macOS Library
 ```bash
-file libspectra.dylib
+file lib/libspectra.dylib
 # Expected: Mach-O universal binary with 2 architectures
 
-lipo -info libspectra.dylib
+lipo -info lib/libspectra.dylib
 # Expected: Architectures: x86_64 arm64
 
-ls -lh libspectra.dylib
+ls -lh lib/libspectra.dylib
 # Expected: ~250 KB
 ```
 - [ ] Universal binary
 - [ ] Both architectures present
 - [ ] Size reasonable
-
-### Verify Unity Package
-```bash
-tar -tzf SpectraCore-Unity.tar.gz | head -20
-# Should show directory structure with all libraries
-
-ls -lh SpectraCore-Unity.tar.gz
-# Expected: ~500 KB
-```
-- [ ] Valid tar.gz file
-- [ ] Contains all 3 libraries
-- [ ] Unity directory structure correct
 
 ---
 

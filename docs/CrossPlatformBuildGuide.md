@@ -126,7 +126,7 @@ sudo apt-get install mingw-w64-tools
 
 Use the provided workflow:
 ```bash
-# Workflow is at: .github/workflows/build-multiplatform.yml
+# Workflow is at: .github/workflows/ci.yml
 
 # Push to GitHub and it will:
 # - Build on macOS runner (free)
@@ -166,7 +166,7 @@ Running macOS in VirtualBox/VMware on non-Apple hardware violates Apple EULA.
 
 The workflow file is already created at:
 ```
-.github/workflows/build-multiplatform.yml
+.github/workflows/ci.yml
 ```
 
 ### How It Works
@@ -375,7 +375,7 @@ Once you have the platform-specific libraries:
 
 3. **Set up GitHub Actions:**
    ```bash
-   git add .github/workflows/build-multiplatform.yml
+   git add .github/workflows/ci.yml
    git commit -m "Add multi-platform CI"
    git push
    ```

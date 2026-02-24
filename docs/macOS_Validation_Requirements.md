@@ -559,7 +559,7 @@ du -h libspectra.dylib
 - **Standalone Test:** `unity/Tests/StandalonePInvokeTest.cs`
 
 ### CI/CD
-- **Workflow:** `.github/workflows/build-multiplatform.yml`
+- **Workflow:** `.github/workflows/ci.yml`
 - **Actions Page:** https://github.com/yogt1984/SpectraCore/actions
 - **Artifacts:** Download from successful workflow runs
 
