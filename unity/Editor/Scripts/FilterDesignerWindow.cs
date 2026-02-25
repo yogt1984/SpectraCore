@@ -24,6 +24,8 @@ namespace Spectra.Editor
         private FilterType responseType = FilterType.Lowpass;
         private int order = 4;
         private float cutoffFreq = 0.25f;
+        private float lowFreq = 0.2f;      // For bandpass/bandstop
+        private float highFreq = 0.4f;     // For bandpass/bandstop
         private float passbandRipple = 0.5f;
         private float stopbandAtten = 40.0f;
 
@@ -95,11 +97,41 @@ namespace Spectra.Editor
             // Order
             order = EditorGUILayout.IntSlider("Order", order, 1, 10);
 
-            // Cutoff frequency
-            cutoffFreq = EditorGUILayout.Slider("Normalized Cutoff", cutoffFreq, 0.01f, 0.99f);
-            EditorGUILayout.LabelField("", $"(0 = DC, 1 = Nyquist frequency)", EditorStyles.miniLabel);
+            // Frequency parameters based on response type
+            bool isBandpass = (responseType == FilterType.Bandpass || responseType == FilterType.Bandstop);
+
+            if (isBandpass)
+            {
+                EditorGUILayout.LabelField("Frequency Range", EditorStyles.boldLabel);
+                EditorGUI.indentLevel++;
+
+                EditorGUILayout.LabelField("Low Frequency:");
+                lowFreq = EditorGUILayout.Slider(lowFreq, 0.01f, 0.98f);
+                EditorGUILayout.LabelField("", $"({lowFreq:F3})", EditorStyles.miniLabel);
+
+                EditorGUILayout.Space(5);
+
+                EditorGUILayout.LabelField("High Frequency:");
+                highFreq = EditorGUILayout.Slider(highFreq, lowFreq + 0.01f, 0.99f);
+                EditorGUILayout.LabelField("", $"({highFreq:F3})", EditorStyles.miniLabel);
+
+                EditorGUILayout.Space(3);
+                float centerFreq = (lowFreq + highFreq) / 2f;
+                EditorGUILayout.LabelField("Center Frequency:", $"{centerFreq:F3}", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField("Bandwidth:", $"{(highFreq - lowFreq):F3}", EditorStyles.miniLabel);
+
+                EditorGUI.indentLevel--;
+            }
+            else
+            {
+                // Single cutoff frequency for lowpass/highpass
+                EditorGUILayout.LabelField("Cutoff Frequency");
+                cutoffFreq = EditorGUILayout.Slider("Normalized Cutoff", cutoffFreq, 0.01f, 0.99f);
+                EditorGUILayout.LabelField("", $"(0 = DC, 1 = Nyquist frequency)", EditorStyles.miniLabel);
+            }
 
             // Type-specific parameters
+            EditorGUILayout.Space(5);
             switch (filterType)
             {
                 case FilterDesignType.ChebyshevI:
@@ -209,10 +241,39 @@ namespace Spectra.Editor
                 prevPoint = point;
             }
 
-            // Draw cutoff frequency marker
-            float cutoffX = rect.x + cutoffFreq * rect.width;
-            Handles.color = Color.yellow;
-            Handles.DrawLine(new Vector3(cutoffX, rect.y, 0), new Vector3(cutoffX, rect.yMax, 0));
+            // Draw frequency markers
+            bool isBandpass = (responseType == FilterType.Bandpass || responseType == FilterType.Bandstop);
+
+            if (isBandpass)
+            {
+                // Draw low and high frequency markers for bandpass/bandstop
+                float lowX = rect.x + lowFreq * rect.width;
+                float highX = rect.x + highFreq * rect.width;
+
+                // Fill passband region for bandpass
+                if (responseType == FilterType.Bandpass)
+                {
+                    Handles.color = new Color(0.3f, 0.8f, 0.3f, 0.1f);
+                    EditorGUI.DrawRect(new Rect(lowX, rect.y, highX - lowX, rect.height), new Color(0.3f, 0.8f, 0.3f, 0.1f));
+                }
+                else // Bandstop
+                {
+                    Handles.color = new Color(0.8f, 0.3f, 0.3f, 0.1f);
+                    EditorGUI.DrawRect(new Rect(lowX, rect.y, highX - lowX, rect.height), new Color(0.8f, 0.3f, 0.3f, 0.1f));
+                }
+
+                // Draw edges
+                Handles.color = Color.yellow;
+                Handles.DrawLine(new Vector3(lowX, rect.y, 0), new Vector3(lowX, rect.yMax, 0));
+                Handles.DrawLine(new Vector3(highX, rect.y, 0), new Vector3(highX, rect.yMax, 0));
+            }
+            else
+            {
+                // Single cutoff frequency marker for lowpass/highpass
+                float cutoffX = rect.x + cutoffFreq * rect.width;
+                Handles.color = Color.yellow;
+                Handles.DrawLine(new Vector3(cutoffX, rect.y, 0), new Vector3(cutoffX, rect.yMax, 0));
+            }
         }
 
         private void DrawPhasePlot(Rect rect)
@@ -250,10 +311,24 @@ namespace Spectra.Editor
                 prevPoint = point;
             }
 
-            // Draw cutoff frequency marker
-            float cutoffX = rect.x + cutoffFreq * rect.width;
-            Handles.color = Color.yellow;
-            Handles.DrawLine(new Vector3(cutoffX, rect.y, 0), new Vector3(cutoffX, rect.yMax, 0));
+            // Draw frequency markers
+            bool isBandpass = (responseType == FilterType.Bandpass || responseType == FilterType.Bandstop);
+
+            if (isBandpass)
+            {
+                float lowX = rect.x + lowFreq * rect.width;
+                float highX = rect.x + highFreq * rect.width;
+
+                Handles.color = Color.yellow;
+                Handles.DrawLine(new Vector3(lowX, rect.y, 0), new Vector3(lowX, rect.yMax, 0));
+                Handles.DrawLine(new Vector3(highX, rect.y, 0), new Vector3(highX, rect.yMax, 0));
+            }
+            else
+            {
+                float cutoffX = rect.x + cutoffFreq * rect.width;
+                Handles.color = Color.yellow;
+                Handles.DrawLine(new Vector3(cutoffX, rect.y, 0), new Vector3(cutoffX, rect.yMax, 0));
+            }
         }
 
         private void DrawGrid(Rect rect, float minVal, float maxVal, string unit)
@@ -312,24 +387,52 @@ namespace Spectra.Editor
         {
             try
             {
-                // Design filter based on type
-                switch (filterType)
+                bool isBandpass = (responseType == FilterType.Bandpass || responseType == FilterType.Bandstop);
+
+                // Design filter based on type and response
+                if (isBandpass)
                 {
-                    case FilterDesignType.Butterworth:
-                        (b, a) = DSP.Butter(order, cutoffFreq, responseType);
-                        break;
+                    // Use dual-frequency overloads for bandpass/bandstop
+                    switch (filterType)
+                    {
+                        case FilterDesignType.Butterworth:
+                            (b, a) = DSP.Butter(order, lowFreq, highFreq, responseType);
+                            break;
 
-                    case FilterDesignType.ChebyshevI:
-                        (b, a) = DSP.Cheby1(order, passbandRipple, cutoffFreq, responseType);
-                        break;
+                        case FilterDesignType.ChebyshevI:
+                            (b, a) = DSP.Cheby1(order, passbandRipple, lowFreq, highFreq, responseType);
+                            break;
 
-                    case FilterDesignType.ChebyshevII:
-                        (b, a) = DSP.Cheby2(order, stopbandAtten, cutoffFreq, responseType);
-                        break;
+                        case FilterDesignType.ChebyshevII:
+                            (b, a) = DSP.Cheby2(order, stopbandAtten, lowFreq, highFreq, responseType);
+                            break;
 
-                    case FilterDesignType.Elliptic:
-                        (b, a) = DSP.Ellip(order, passbandRipple, stopbandAtten, cutoffFreq, responseType);
-                        break;
+                        case FilterDesignType.Elliptic:
+                            (b, a) = DSP.Ellip(order, passbandRipple, stopbandAtten, lowFreq, highFreq, responseType);
+                            break;
+                    }
+                }
+                else
+                {
+                    // Single-frequency overloads for lowpass/highpass
+                    switch (filterType)
+                    {
+                        case FilterDesignType.Butterworth:
+                            (b, a) = DSP.Butter(order, cutoffFreq, responseType);
+                            break;
+
+                        case FilterDesignType.ChebyshevI:
+                            (b, a) = DSP.Cheby1(order, passbandRipple, cutoffFreq, responseType);
+                            break;
+
+                        case FilterDesignType.ChebyshevII:
+                            (b, a) = DSP.Cheby2(order, stopbandAtten, cutoffFreq, responseType);
+                            break;
+
+                        case FilterDesignType.Elliptic:
+                            (b, a) = DSP.Ellip(order, passbandRipple, stopbandAtten, cutoffFreq, responseType);
+                            break;
+                    }
                 }
 
                 // Compute frequency response
@@ -364,7 +467,24 @@ namespace Spectra.Editor
 
             var sb = new StringBuilder();
             sb.AppendLine("// Filter Coefficients");
-            sb.AppendLine($"// Type: {filterType}, Order: {order}, Cutoff: {cutoffFreq:F3}");
+            sb.AppendLine($"// Type: {filterType} {responseType}");
+            sb.AppendLine($"// Order: {order}");
+
+            bool isBandpass = (responseType == FilterType.Bandpass || responseType == FilterType.Bandstop);
+            if (isBandpass)
+            {
+                sb.AppendLine($"// Frequency Range: {lowFreq:F3} - {highFreq:F3}");
+            }
+            else
+            {
+                sb.AppendLine($"// Cutoff Frequency: {cutoffFreq:F3}");
+            }
+
+            if (filterType == FilterDesignType.ChebyshevI || filterType == FilterDesignType.Elliptic)
+                sb.AppendLine($"// Passband Ripple: {passbandRipple:F2} dB");
+            if (filterType == FilterDesignType.ChebyshevII || filterType == FilterDesignType.Elliptic)
+                sb.AppendLine($"// Stopband Attenuation: {stopbandAtten:F2} dB");
+
             sb.AppendLine();
             sb.AppendLine($"float[] b = new float[] {{ {FormatCoefficients(b)} }};");
             sb.AppendLine($"float[] a = new float[] {{ {FormatCoefficients(a)} }};");
@@ -378,10 +498,15 @@ namespace Spectra.Editor
             if (b == null || a == null)
                 return;
 
+            bool isBandpass = (responseType == FilterType.Bandpass || responseType == FilterType.Bandstop);
+            string filename = isBandpass
+                ? $"{filterType}{responseType}Filter_{order}order"
+                : $"{filterType}Filter_{order}order";
+
             string path = EditorUtility.SaveFilePanel(
                 "Export Filter Coefficients",
                 Application.dataPath,
-                $"{filterType}Filter_{order}order",
+                filename,
                 "cs");
 
             if (string.IsNullOrEmpty(path))
@@ -392,13 +517,23 @@ namespace Spectra.Editor
             sb.AppendLine();
             sb.AppendLine("/// <summary>");
             sb.AppendLine($"/// {filterType} {responseType} filter");
-            sb.AppendLine($"/// Order: {order}, Cutoff: {cutoffFreq:F3}");
+            sb.AppendLine($"/// Order: {order}");
+
+            if (isBandpass)
+            {
+                sb.AppendLine($"/// Frequency Range: {lowFreq:F3} - {highFreq:F3}");
+            }
+            else
+            {
+                sb.AppendLine($"/// Cutoff Frequency: {cutoffFreq:F3}");
+            }
+
             if (filterType == FilterDesignType.ChebyshevI || filterType == FilterDesignType.Elliptic)
                 sb.AppendLine($"/// Passband Ripple: {passbandRipple:F2} dB");
             if (filterType == FilterDesignType.ChebyshevII || filterType == FilterDesignType.Elliptic)
                 sb.AppendLine($"/// Stopband Attenuation: {stopbandAtten:F2} dB");
             sb.AppendLine("/// </summary>");
-            sb.AppendLine($"public class {filterType}Filter");
+            sb.AppendLine($"public class {filterType}{responseType}Filter");
             sb.AppendLine("{");
             sb.AppendLine($"    public static readonly float[] B = new float[]");
             sb.AppendLine("    {");
