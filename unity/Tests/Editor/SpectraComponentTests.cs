@@ -568,5 +568,347 @@ namespace Spectra.Tests
             // Check that high frequencies are well attenuated
             Assert.Less(mag[mag.Length - 1], 0.01f);
         }
+
+        // ====================================================================
+        // DSP Bandpass/Bandstop Filter Design Tests
+        // ====================================================================
+
+        [Test]
+        public void DSP_Butter_BandpassDesignsValidFilter()
+        {
+            var (b, a) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandpass);
+
+            // Bandpass of order 2 should produce 5 b coeffs and 5 a coeffs (order 4)
+            Assert.AreEqual(5, b.Length, "Bandpass order doubles: 2 → 4");
+            Assert.AreEqual(5, a.Length, "Bandpass order doubles: 2 → 4");
+            Assert.AreNotEqual(0.0f, b[0]);
+            Assert.AreNotEqual(0.0f, a[0]);
+        }
+
+        [Test]
+        public void DSP_Butter_BandstopDesignsValidFilter()
+        {
+            var (b, a) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandstop);
+
+            // Bandstop should also have doubled order
+            Assert.AreEqual(5, b.Length);
+            Assert.AreEqual(5, a.Length);
+            Assert.AreNotEqual(0.0f, b[0]);
+        }
+
+        [Test]
+        public void DSP_Cheby1_BandpassDesignsValidFilter()
+        {
+            var (b, a) = DSP.Cheby1(3, 0.5f, 0.2f, 0.5f, FilterType.Bandpass);
+
+            // Order 3 bandpass should produce order 6 filter
+            Assert.AreEqual(7, b.Length);
+            Assert.AreEqual(7, a.Length);
+            Assert.AreNotEqual(0.0f, b[0]);
+        }
+
+        [Test]
+        public void DSP_Cheby1_BandstopDesignsValidFilter()
+        {
+            var (b, a) = DSP.Cheby1(2, 0.5f, 0.25f, 0.45f, FilterType.Bandstop);
+
+            Assert.Greater(b.Length, 0);
+            Assert.Greater(a.Length, 0);
+            Assert.AreEqual(b.Length, a.Length);
+        }
+
+        [Test]
+        public void DSP_Cheby2_BandpassDesignsValidFilter()
+        {
+            var (b, a) = DSP.Cheby2(2, 40.0f, 0.2f, 0.4f, FilterType.Bandpass);
+
+            Assert.Greater(b.Length, 0);
+            Assert.Greater(a.Length, 0);
+            Assert.AreEqual(b.Length, a.Length);
+        }
+
+        [Test]
+        public void DSP_Cheby2_BandstopDesignsValidFilter()
+        {
+            var (b, a) = DSP.Cheby2(3, 50.0f, 0.25f, 0.5f, FilterType.Bandstop);
+
+            Assert.Greater(b.Length, 0);
+            Assert.AreEqual(b.Length, a.Length);
+        }
+
+        [Test]
+        public void DSP_Ellip_BandpassDesignsValidFilter()
+        {
+            var (b, a) = DSP.Ellip(2, 0.5f, 40.0f, 0.2f, 0.5f, FilterType.Bandpass);
+
+            Assert.Greater(b.Length, 0);
+            Assert.Greater(a.Length, 0);
+            Assert.AreEqual(b.Length, a.Length);
+        }
+
+        [Test]
+        public void DSP_Ellip_BandstopDesignsValidFilter()
+        {
+            var (b, a) = DSP.Ellip(2, 0.5f, 40.0f, 0.25f, 0.45f, FilterType.Bandstop);
+
+            Assert.Greater(b.Length, 0);
+            Assert.AreEqual(b.Length, a.Length);
+        }
+
+        [Test]
+        public void DSP_Butter_BandpassFrequencyResponse()
+        {
+            var (b, a) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandpass);
+            var (mag, phase, freqs) = DSP.Freqz(b, a);
+
+            Assert.Greater(mag.Length, 0);
+
+            // Find magnitude at different frequencies
+            float dcGain = mag[0];              // Near DC (0 Hz)
+            float nyqGain = mag[mag.Length - 1]; // Near Nyquist
+            float centerIdx = mag.Length / 2;
+            float centerGain = mag[(int)centerIdx]; // Near center
+
+            // Bandpass should attenuate DC and Nyquist
+            Assert.Less(dcGain, 0.1f, "DC should be attenuated");
+            Assert.Less(nyqGain, 0.1f, "Nyquist should be attenuated");
+
+            // Center frequency should pass
+            Assert.Greater(centerGain, 0.5f, "Center frequency should pass");
+        }
+
+        [Test]
+        public void DSP_Butter_BandstopFrequencyResponse()
+        {
+            var (b, a) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandstop);
+            var (mag, phase, freqs) = DSP.Freqz(b, a);
+
+            Assert.Greater(mag.Length, 0);
+
+            // Bandstop should pass DC and Nyquist
+            float dcGain = mag[0];
+            float nyqGain = mag[mag.Length - 1];
+            float centerIdx = mag.Length / 2;
+            float centerGain = mag[(int)centerIdx];
+
+            // DC and Nyquist should pass
+            Assert.Greater(dcGain, 0.7f, "DC should pass");
+            Assert.Greater(nyqGain, 0.7f, "Nyquist should pass");
+
+            // Center frequency should be attenuated
+            Assert.Less(centerGain, 0.3f, "Center frequency should be attenuated");
+        }
+
+        [Test]
+        public void DSP_BandpassAndBandstopAreComplementary()
+        {
+            // Bandpass and bandstop should be complementary (sum to ~1 at all frequencies)
+            var (b_bp, a_bp) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandpass);
+            var (b_bs, a_bs) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandstop);
+
+            var (mag_bp, _, _) = DSP.Freqz(b_bp, a_bp);
+            var (mag_bs, _, _) = DSP.Freqz(b_bs, a_bs);
+
+            Assert.AreEqual(mag_bp.Length, mag_bs.Length);
+
+            // Sum should be approximately 1 at most frequencies
+            for (int i = 0; i < mag_bp.Length; i++)
+            {
+                float sum = mag_bp[i] + mag_bs[i];
+                // Allow some tolerance due to numerical precision
+                Assert.AreEqual(1.0f, sum, 0.15f, $"Complementary at index {i}: BP={mag_bp[i]}, BS={mag_bs[i]}");
+            }
+        }
+
+        [Test]
+        public void DSP_Cheby1_BandpassFrequencyResponse()
+        {
+            var (b, a) = DSP.Cheby1(2, 0.5f, 0.2f, 0.5f, FilterType.Bandpass);
+            var (mag, phase, freqs) = DSP.Freqz(b, a);
+
+            // DC and Nyquist should be attenuated
+            Assert.Less(mag[0], 0.1f);
+            Assert.Less(mag[mag.Length - 1], 0.1f);
+
+            // Passband should have gain
+            Assert.Greater(mag[mag.Length / 2], 0.5f);
+        }
+
+        [Test]
+        public void DSP_Ellip_BandpassFrequencyResponse()
+        {
+            var (b, a) = DSP.Ellip(2, 0.5f, 40.0f, 0.2f, 0.5f, FilterType.Bandpass);
+            var (mag, phase, freqs) = DSP.Freqz(b, a);
+
+            // Elliptic should have sharp cutoff
+            Assert.Less(mag[0], 0.1f);
+            Assert.Less(mag[mag.Length - 1], 0.1f);
+            Assert.Greater(mag[mag.Length / 2], 0.7f);
+        }
+
+        [Test]
+        public void DSP_Butter_BandpassFilterApplication()
+        {
+            var (b, a) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandpass);
+
+            // Create a multi-frequency signal: 0.1 Hz + 0.3 Hz + 0.8 Hz
+            float[] input = new float[512];
+            for (int i = 0; i < 512; i++)
+            {
+                float t = i / 512.0f;
+                input[i] = (float)(
+                    Math.Sin(2.0 * Math.PI * 0.1f * t) +
+                    Math.Sin(2.0 * Math.PI * 0.3f * t) +
+                    Math.Sin(2.0 * Math.PI * 0.8f * t)
+                );
+            }
+
+            float[] output = DSP.LFilter(b, a, input);
+
+            Assert.AreEqual(input.Length, output.Length);
+
+            // After bandpass (0.2-0.4), the 0.3 Hz component should remain
+            // but 0.1 and 0.8 should be attenuated
+            float avgOutput = 0;
+            for (int i = 100; i < 200; i++) // Skip transient
+                avgOutput += Math.Abs(output[i]);
+            avgOutput /= 100;
+
+            Assert.Greater(avgOutput, 0.1f, "Output should have significant signal");
+        }
+
+        [Test]
+        public void DSP_Butter_BandpassInvalidFrequencies()
+        {
+            // Low frequency >= high frequency should return passthrough
+            var (b, a) = DSP.Butter(2, 0.5f, 0.2f, FilterType.Bandpass);
+
+            // Should return passthrough (b=[1], a=[1])
+            Assert.AreEqual(1, b.Length);
+            Assert.AreEqual(1, a.Length);
+            Assert.AreEqual(1.0f, b[0]);
+            Assert.AreEqual(1.0f, a[0]);
+        }
+
+        [Test]
+        public void DSP_Butter_BandpassOutOfRange()
+        {
+            // Frequencies out of valid range [0, 1]
+            var (b, a) = DSP.Butter(2, -0.1f, 0.5f, FilterType.Bandpass);
+
+            // Should return passthrough
+            Assert.AreEqual(1, b.Length);
+            Assert.AreEqual(1, a.Length);
+        }
+
+        [Test]
+        public void DSP_FilterOrder_DoublesBandpass()
+        {
+            for (int order = 1; order <= 4; order++)
+            {
+                var (b_lp, a_lp) = DSP.Butter(order, 0.3f, FilterType.Lowpass);
+                var (b_bp, a_bp) = DSP.Butter(order, 0.2f, 0.4f, FilterType.Bandpass);
+
+                // Bandpass should have 2*order + 1 coefficients
+                int expected_lp = order + 1;
+                int expected_bp = 2 * order + 1;
+
+                Assert.AreEqual(expected_lp, b_lp.Length, $"LP order {order}");
+                Assert.AreEqual(expected_bp, b_bp.Length, $"BP order {order}");
+            }
+        }
+
+        [Test]
+        public void DSP_AllFilterTypes_SupportBandpass()
+        {
+            // Ensure all filter types support bandpass
+            var bp_butter = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandpass);
+            var bp_cheby1 = DSP.Cheby1(2, 0.5f, 0.2f, 0.4f, FilterType.Bandpass);
+            var bp_cheby2 = DSP.Cheby2(2, 40.0f, 0.2f, 0.4f, FilterType.Bandpass);
+            var bp_ellip = DSP.Ellip(2, 0.5f, 40.0f, 0.2f, 0.4f, FilterType.Bandpass);
+
+            Assert.Greater(bp_butter.b.Length, 0);
+            Assert.Greater(bp_cheby1.b.Length, 0);
+            Assert.Greater(bp_cheby2.b.Length, 0);
+            Assert.Greater(bp_ellip.b.Length, 0);
+        }
+
+        [Test]
+        public void DSP_AllFilterTypes_SupportBandstop()
+        {
+            // Ensure all filter types support bandstop
+            var bs_butter = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandstop);
+            var bs_cheby1 = DSP.Cheby1(2, 0.5f, 0.2f, 0.4f, FilterType.Bandstop);
+            var bs_cheby2 = DSP.Cheby2(2, 40.0f, 0.2f, 0.4f, FilterType.Bandstop);
+            var bs_ellip = DSP.Ellip(2, 0.5f, 40.0f, 0.2f, 0.4f, FilterType.Bandstop);
+
+            Assert.Greater(bs_butter.b.Length, 0);
+            Assert.Greater(bs_cheby1.b.Length, 0);
+            Assert.Greater(bs_cheby2.b.Length, 0);
+            Assert.Greater(bs_ellip.b.Length, 0);
+        }
+
+        [Test]
+        public void DSP_Butter_BandpassVersusLowpassHighpass()
+        {
+            // Bandpass should be similar to cascading highpass + lowpass
+            var (b_bp, a_bp) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandpass);
+            var (b_hp, a_hp) = DSP.Butter(2, 0.2f, FilterType.Highpass);
+            var (b_lp, a_lp) = DSP.Butter(2, 0.4f, FilterType.Lowpass);
+
+            // Get frequency responses
+            var (mag_bp, _, _) = DSP.Freqz(b_bp, a_bp);
+            var (mag_hp, _, _) = DSP.Freqz(b_hp, a_hp);
+            var (mag_lp, _, _) = DSP.Freqz(b_lp, a_lp);
+
+            // Both should attenuate low frequencies (like highpass)
+            Assert.Less(mag_bp[0], mag_hp[0] + 0.1f);
+
+            // Both should attenuate high frequencies (like lowpass)
+            Assert.Less(mag_bp[mag_bp.Length - 1], mag_lp[mag_lp.Length - 1] + 0.1f);
+        }
+
+        [Test]
+        public void DSP_Butter_BandstopVersusLowpassHighpass()
+        {
+            // Bandstop should pass DC and Nyquist (like parallel lowpass + highpass)
+            var (b_bs, a_bs) = DSP.Butter(2, 0.2f, 0.4f, FilterType.Bandstop);
+            var (b_lp, a_lp) = DSP.Butter(2, 0.2f, FilterType.Lowpass);
+            var (b_hp, a_hp) = DSP.Butter(2, 0.4f, FilterType.Highpass);
+
+            var (mag_bs, _, _) = DSP.Freqz(b_bs, a_bs);
+            var (mag_lp, _, _) = DSP.Freqz(b_lp, a_lp);
+            var (mag_hp, _, _) = DSP.Freqz(b_hp, a_hp);
+
+            // Bandstop should pass DC and Nyquist
+            Assert.Greater(mag_bs[0], 0.7f, "Bandstop should pass DC");
+            Assert.Greater(mag_bs[mag_bs.Length - 1], 0.7f, "Bandstop should pass Nyquist");
+
+            // Bandstop should attenuate center frequency more than LP or HP alone
+            float center = mag_bs[mag_bs.Length / 2];
+            Assert.Less(center, Math.Min(mag_lp[mag_lp.Length / 2], mag_hp[mag_hp.Length / 2]));
+        }
+
+        [Test]
+        public void DSP_Butter_BandpassFiltFilt()
+        {
+            var (b, a) = DSP.Butter(1, 0.2f, 0.4f, FilterType.Bandpass);
+
+            float[] input = new float[256];
+            for (int i = 0; i < 256; i++)
+                input[i] = (float)Math.Sin(2.0 * Math.PI * 0.3f * i / 256);
+
+            float[] output = DSP.FiltFilt(b, a, input);
+
+            Assert.AreEqual(input.Length, output.Length);
+
+            // Output should be in passband and have significant magnitude
+            float avgMag = 0;
+            for (int i = 50; i < 200; i++)
+                avgMag += Math.Abs(output[i]);
+            avgMag /= 150;
+
+            Assert.Greater(avgMag, 0.3f, "FiltFilt bandpass should preserve signal");
+        }
     }
 }
