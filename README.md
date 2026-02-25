@@ -2,7 +2,7 @@
 
 **Professional-grade DSP library for Unity with comprehensive C# bindings and editor tools**
 
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/yogt1984/SpectraCore/releases)
+[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/yogt1984/SpectraCore/releases)
 [![CI/CD](https://github.com/yogt1984/SpectraCore/workflows/CI/badge.svg)](https://github.com/yogt1984/SpectraCore/actions)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Unity](https://img.shields.io/badge/unity-2021.3+-orange.svg)](https://unity.com)
@@ -28,7 +28,7 @@ SpectraCore is a high-performance, cross-platform digital signal processing (DSP
 ### 🚀 Core Capabilities
 
 - **Real-time FFT & STFT** - Fast Fourier Transform with configurable sizes (256-8192)
-- **Professional Filter Design** - Butterworth, Chebyshev I/II, Elliptic filters
+- **Professional Filter Design** - Butterworth, Chebyshev I/II, Elliptic with lowpass/highpass/bandpass/bandstop ⭐ NEW
 - **Signal Analysis** - Correlation, PSD, Hilbert transform, onset detection
 - **Streaming Processing** - Lock-free, zero-allocation audio pipeline
 - **Unity Integration** - Native plugins with managed C# wrappers
@@ -100,6 +100,10 @@ var (b, a) = DSP.Butter(4, 0.3f, FilterType.Lowpass);
 
 // Apply zero-phase filtering
 float[] filtered = DSP.FiltFilt(b, a, inputSignal);
+
+// NEW: Design a bandpass filter (e.g., 0.2 - 0.5 normalized frequency)
+var (b_bp, a_bp) = DSP.Butter(4, 0.2f, 0.5f, FilterType.Bandpass);
+float[] bandpassed = DSP.FiltFilt(b_bp, a_bp, inputSignal);
 
 // Or use streaming for real-time
 using var filter = new StreamingIIRFilter(b, a);
@@ -300,11 +304,13 @@ All examples include full source code, setup instructions, and ready-to-use scri
 - Microphone input support
 - **Setup time:** 10 minutes
 
-#### 2. Filter Playground
-- Interactive filter designer
-- Real-time frequency response plots
-- 4 filter types with parameter controls
-- A/B comparison
+#### 2. Filter Playground ⭐ NEW
+- Interactive filter designer with bandpass/bandstop support
+- Real-time frequency response plots (Bode diagrams)
+- 4 filter types (Butterworth, Chebyshev I/II, Elliptic) × 4 response types (LP/HP/BP/BS)
+- Dual-frequency controls for bandpass/bandstop design
+- Practical examples (speech enhancement, hum removal, music analysis)
+- Audio preview and filter statistics
 - **Setup time:** 15 minutes
 
 #### 3. Beat-Synced Game
@@ -520,21 +526,24 @@ Free for commercial and personal use.
 
 ## 🗺️ Roadmap
 
-### Current (v1.0)
+### Current (v1.1.0)
 - ✅ Core DSP functions
 - ✅ Multi-platform support (Linux, Windows, macOS)
-- ✅ Unity integration
-- ✅ Editor tools
-- ✅ Comprehensive documentation
-- ✅ CI/CD automation
+- ✅ Unity integration with editor tools
+- ✅ Comprehensive documentation (13,000+ lines)
+- ✅ CI/CD automation with 204+ automated tests
+- ✅ **Bandpass and Bandstop filters** for all IIR types (NEW)
+- ✅ **Enhanced Filter Designer** with dual-frequency controls (NEW)
+- ✅ **FilterPlayground sample** with practical examples (NEW)
 
-### Future
+### Future (v1.2+)
 - 🔄 Mobile platforms (iOS, Android)
 - 🔄 WebGL/WASM support
 - 🔄 Additional filter types (Bessel, Parks-McClellan)
-- 🔄 Advanced analysis functions
-- 🔄 Performance optimizations (SIMD)
-- 🔄 Unity DOTS/Burst support
+- 🔄 Advanced analysis functions (MFCC, spectral centroid)
+- 🔄 Performance optimizations (SIMD, Burst)
+- 🔄 Real-time waveform display in Filter Designer
+- 🔄 Preset system for common filter configurations
 
 ---
 

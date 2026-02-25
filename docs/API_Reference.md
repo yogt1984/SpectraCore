@@ -32,6 +32,7 @@ Static class providing MATLAB-equivalent DSP functions. All functions are thread
 
 Design a Butterworth filter.
 
+**Single-Frequency Overload (Lowpass/Highpass):**
 ```csharp
 public static (float[] b, float[] a) Butter(
     int order,
@@ -39,12 +40,27 @@ public static (float[] b, float[] a) Butter(
     FilterType type = FilterType.Lowpass)
 ```
 
-**Parameters:**
+**Dual-Frequency Overload (Bandpass/Bandstop):**
+```csharp
+public static (float[] b, float[] a) Butter(
+    int order,
+    float lowFreq,
+    float highFreq,
+    FilterType type)  // Bandpass or Bandstop
+```
+
+**Parameters (Single-Frequency):**
 - `order` - Filter order (typical: 2-8)
 - `normalizedFreq` - Cutoff frequency normalized to Nyquist (0.0 to 1.0)
   - 0.5 = quarter of sample rate
   - 1.0 = Nyquist frequency (half sample rate)
-- `type` - Filter type (Lowpass, Highpass, Bandpass, Bandstop)
+- `type` - Filter type (Lowpass or Highpass)
+
+**Parameters (Dual-Frequency):**
+- `order` - Filter order (typical: 2-8)
+- `lowFreq` - Lower frequency boundary (0.0 to 1.0)
+- `highFreq` - Upper frequency boundary (0.0 to 1.0, must be > lowFreq)
+- `type` - Filter type (Bandpass or Bandstop)
 
 **Returns:**
 - Tuple of (`b`, `a`) filter coefficients
@@ -56,7 +72,7 @@ public static (float[] b, float[] a) Butter(
 [b, a] = butter(order, Wn, type)
 ```
 
-**Example:**
+**Example - Single Frequency (Lowpass/Highpass):**
 ```csharp
 // Design 4th-order lowpass at 1000 Hz (fs = 44100 Hz)
 float cutoff = 1000f / (44100f / 2f); // Normalize to Nyquist
@@ -64,6 +80,23 @@ var (b, a) = DSP.Butter(4, cutoff, FilterType.Lowpass);
 
 // Apply to signal
 float[] filtered = DSP.LFilter(b, a, audioData);
+```
+
+**Example - Dual Frequency (Bandpass/Bandstop):**
+```csharp
+// Design 4th-order bandpass filter (60 Hz - 3500 Hz at 44100 Hz)
+float lowFreq = 60f / (44100f / 2f);      // ~0.003
+float highFreq = 3500f / (44100f / 2f);   // ~0.159
+var (b, a) = DSP.Butter(4, lowFreq, highFreq, FilterType.Bandpass);
+
+// Design 4th-order bandstop (hum removal around 60 Hz)
+float notchLow = 55f / (44100f / 2f);     // ~0.0025
+float notchHigh = 65f / (44100f / 2f);    // ~0.003
+var (b_bs, a_bs) = DSP.Butter(4, notchLow, notchHigh, FilterType.Bandstop);
+
+// Apply both
+float[] bandpassed = DSP.FiltFilt(b, a, audioData);
+float[] dehummed = DSP.FiltFilt(b_bs, a_bs, audioData);
 ```
 
 **Frequency Calculation:**
@@ -95,6 +128,7 @@ float f10kHz = 10000f / 22050f; // 0.4535
 
 Design a Chebyshev Type I filter (passband ripple).
 
+**Single-Frequency Overload (Lowpass/Highpass):**
 ```csharp
 public static (float[] b, float[] a) Cheby1(
     int order,
@@ -103,12 +137,24 @@ public static (float[] b, float[] a) Cheby1(
     FilterType type = FilterType.Lowpass)
 ```
 
+**Dual-Frequency Overload (Bandpass/Bandstop):**
+```csharp
+public static (float[] b, float[] a) Cheby1(
+    int order,
+    float rippleDb,
+    float lowFreq,
+    float highFreq,
+    FilterType type)  // Bandpass or Bandstop
+```
+
 **Parameters:**
 - `order` - Filter order (typical: 2-8)
 - `rippleDb` - Passband ripple in dB (typical: 0.1 to 3 dB)
   - Lower ripple = closer to Butterworth
   - Higher ripple = steeper rolloff
-- `normalizedFreq` - Cutoff frequency (0.0 to 1.0, Nyquist-normalized)
+- `normalizedFreq` (single-freq) - Cutoff frequency (0.0 to 1.0, Nyquist-normalized)
+- `lowFreq` (dual-freq) - Lower frequency boundary
+- `highFreq` (dual-freq) - Upper frequency boundary
 - `type` - Filter type
 
 **Returns:**
@@ -119,12 +165,23 @@ public static (float[] b, float[] a) Cheby1(
 [b, a] = cheby1(order, Rp, Wn, type)
 ```
 
-**Example:**
+**Example - Single Frequency:**
 ```csharp
 // Design 6th-order Chebyshev I lowpass with 0.5 dB ripple
 var (b, a) = DSP.Cheby1(6, 0.5f, 0.25f, FilterType.Lowpass);
 
 // Plot frequency response
+var (mag, phase, freqs) = DSP.FreqzDb(b, a, 512);
+```
+
+**Example - Dual Frequency (Bandpass):**
+```csharp
+// Design 6th-order Chebyshev I bandpass with 0.5 dB ripple (250 Hz - 5 kHz)
+float lowFreq = 250f / (44100f / 2f);    // ~0.0113
+float highFreq = 5000f / (44100f / 2f);  // ~0.227
+var (b, a) = DSP.Cheby1(6, 0.5f, lowFreq, highFreq, FilterType.Bandpass);
+
+// Steep cutoff with sharper response than Butterworth
 var (mag, phase, freqs) = DSP.FreqzDb(b, a, 512);
 ```
 
@@ -150,6 +207,7 @@ var (mag, phase, freqs) = DSP.FreqzDb(b, a, 512);
 
 Design a Chebyshev Type II filter (stopband ripple).
 
+**Single-Frequency Overload (Lowpass/Highpass):**
 ```csharp
 public static (float[] b, float[] a) Cheby2(
     int order,
@@ -158,13 +216,25 @@ public static (float[] b, float[] a) Cheby2(
     FilterType type = FilterType.Lowpass)
 ```
 
+**Dual-Frequency Overload (Bandpass/Bandstop):**
+```csharp
+public static (float[] b, float[] a) Cheby2(
+    int order,
+    float stopbandDb,
+    float lowFreq,
+    float highFreq,
+    FilterType type)  // Bandpass or Bandstop
+```
+
 **Parameters:**
 - `order` - Filter order
 - `stopbandDb` - Stopband attenuation in dB (typical: 20 to 80 dB)
   - 20 dB = 10% stopband level
   - 40 dB = 1% stopband level
   - 60 dB = 0.1% stopband level
-- `normalizedFreq` - Cutoff frequency (Nyquist-normalized)
+- `normalizedFreq` (single-freq) - Cutoff frequency (Nyquist-normalized)
+- `lowFreq` (dual-freq) - Lower frequency boundary
+- `highFreq` (dual-freq) - Upper frequency boundary
 - `type` - Filter type
 
 **Returns:**
@@ -175,12 +245,23 @@ public static (float[] b, float[] a) Cheby2(
 [b, a] = cheby2(order, Rs, Wn, type)
 ```
 
-**Example:**
+**Example - Single Frequency:**
 ```csharp
 // Design highpass with 40 dB stopband attenuation
 var (b, a) = DSP.Cheby2(5, 40f, 0.1f, FilterType.Highpass);
 
 // Apply with zero-phase filtering
+float[] output = DSP.FiltFilt(b, a, input);
+```
+
+**Example - Dual Frequency (Bandpass):**
+```csharp
+// Design 5th-order Chebyshev II bandpass with 40 dB stopband attenuation
+float lowFreq = 80f / (44100f / 2f);     // ~0.004
+float highFreq = 5000f / (44100f / 2f);  // ~0.227
+var (b, a) = DSP.Cheby2(5, 40f, lowFreq, highFreq, FilterType.Bandpass);
+
+// Flat passband, steep rolloff
 float[] output = DSP.FiltFilt(b, a, input);
 ```
 
@@ -202,6 +283,7 @@ float[] output = DSP.FiltFilt(b, a, input);
 
 Design an Elliptic (Cauer) filter.
 
+**Single-Frequency Overload (Lowpass/Highpass):**
 ```csharp
 public static (float[] b, float[] a) Ellip(
     int order,
@@ -211,11 +293,24 @@ public static (float[] b, float[] a) Ellip(
     FilterType type = FilterType.Lowpass)
 ```
 
+**Dual-Frequency Overload (Bandpass/Bandstop):**
+```csharp
+public static (float[] b, float[] a) Ellip(
+    int order,
+    float passbandRippleDb,
+    float stopbandDb,
+    float lowFreq,
+    float highFreq,
+    FilterType type)  // Bandpass or Bandstop
+```
+
 **Parameters:**
 - `order` - Filter order
 - `passbandRippleDb` - Passband ripple in dB (typical: 0.1 to 1 dB)
 - `stopbandDb` - Stopband attenuation in dB (typical: 40 to 80 dB)
-- `normalizedFreq` - Cutoff frequency (Nyquist-normalized)
+- `normalizedFreq` (single-freq) - Cutoff frequency (Nyquist-normalized)
+- `lowFreq` (dual-freq) - Lower frequency boundary
+- `highFreq` (dual-freq) - Upper frequency boundary
 - `type` - Filter type
 
 **Returns:**
@@ -226,7 +321,7 @@ public static (float[] b, float[] a) Ellip(
 [b, a] = ellip(order, Rp, Rs, Wn, type)
 ```
 
-**Example:**
+**Example - Single Frequency:**
 ```csharp
 // Design elliptic filter: 0.5 dB passband, 60 dB stopband
 var (b, a) = DSP.Ellip(4, 0.5f, 60f, 0.3f, FilterType.Lowpass);
@@ -235,6 +330,17 @@ var (b, a) = DSP.Ellip(4, 0.5f, 60f, 0.3f, FilterType.Lowpass);
 var (bButter, aButter) = DSP.Butter(4, 0.3f, FilterType.Lowpass);
 
 // Elliptic has steeper rolloff for same order
+```
+
+**Example - Dual Frequency (Bandpass):**
+```csharp
+// Design 4th-order Elliptic bandpass: steepest rolloff for sharp band isolation
+float lowFreq = 250f / (44100f / 2f);    // ~0.0113
+float highFreq = 2000f / (44100f / 2f);  // ~0.0906
+var (b, a) = DSP.Ellip(4, 0.5f, 60f, lowFreq, highFreq, FilterType.Bandpass);
+
+// Excellent for applications requiring sharp transitions
+float[] output = DSP.FiltFilt(b, a, input);
 ```
 
 **Performance:**
@@ -256,6 +362,113 @@ var (bButter, aButter) = DSP.Butter(4, 0.3f, FilterType.Lowpass);
 | Chebyshev I | Ripple | Monotonic | Steep | Good | Sharp cutoffs |
 | Chebyshev II | Flat | Ripple | Steep | Better | Flat passband needed |
 | Elliptic | Ripple | Ripple | Steepest | Worst | Minimum order |
+
+---
+
+### Bandpass & Bandstop Filter Design
+
+All filter types support bandpass and bandstop via dual-frequency overloads.
+
+#### Bandpass Filters
+
+A bandpass filter isolates a specific frequency band and attenuates frequencies outside this band.
+
+**Use Cases:**
+- Speech enhancement (60 Hz - 3.5 kHz)
+- Acoustic instrument analysis (80 Hz - 5 kHz)
+- Music frequency band separation (bass/mid/treble)
+- Signal extraction from noise
+
+**Design Example:**
+```csharp
+// Speech bandpass: 60 Hz - 3500 Hz at 44.1 kHz
+float lowFreq = 60f / 22050f;       // ~0.003
+float highFreq = 3500f / 22050f;    // ~0.159
+
+// Choose filter type based on requirements
+var (b, a) = DSP.Butter(4, lowFreq, highFreq, FilterType.Bandpass);
+
+// Apply with zero-phase for best phase response
+float[] filtered = DSP.FiltFilt(b, a, audioData);
+```
+
+**Key Characteristics:**
+- Order **doubles** for bandpass: order N → 2N coefficients
+- Example: order 4 Butterworth → 9 b-coefficients, 9 a-coefficients
+- DC and Nyquist gain are attenuated (typically -40 dB for order 4)
+- Center frequency has peak gain (typically near 0 dB)
+- -3dB points at low and high frequency boundaries
+
+**Frequency Response Shape:**
+```
+|H(f)|
+  1 |         ┌───┐
+    |        │     │
+  0 |   ──┘       └──
+    |________________
+    0   f_low   center   f_high  1.0 (norm)
+```
+
+#### Bandstop (Notch) Filters
+
+A bandstop filter attenuates a specific frequency band while passing frequencies outside.
+
+**Use Cases:**
+- 50/60 Hz hum removal (powerline interference)
+- Artifact removal (quantization noise, aliasing)
+- Frequency masking (remove ultrasonic content)
+
+**Design Example - Hum Removal:**
+```csharp
+// Remove 60 Hz ± 5 Hz at 44.1 kHz
+float notchLow = 55f / 22050f;      // ~0.0025
+float notchHigh = 65f / 22050f;     // ~0.003
+
+// Use high order for narrow notch
+var (b, a) = DSP.Butter(6, notchLow, notchHigh, FilterType.Bandstop);
+
+// Apply filtering
+float[] filtered = DSP.FiltFilt(b, a, audioData);
+```
+
+**Key Characteristics:**
+- Order doubles: order N → 2N coefficients
+- DC and Nyquist gain pass (gain ≈ 1.0)
+- Stopband (notch) centered between low and high frequencies
+- Bandwidth width determines notch depth
+- Narrower bandwidth = deeper, sharper notch
+
+**Frequency Response Shape:**
+```
+|H(f)|
+  1 |   ┌──┐       ┌──┐
+    |   │  │       │  │
+  0 |   │  └───┬───┘  │
+    |   │      │      │
+    |___|______|______|___
+      0  f_low  center  f_high  1.0 (norm)
+```
+
+#### Complementary Property
+
+Bandpass and bandstop filters are complementary: `BP + BS ≈ 1.0` (in the linear magnitude sense).
+
+```csharp
+// Create complementary filter pair
+var (b_bp, a_bp) = DSP.Butter(4, 0.2f, 0.5f, FilterType.Bandpass);
+var (b_bs, a_bs) = DSP.Butter(4, 0.2f, 0.5f, FilterType.Bandstop);
+
+// Apply both to same signal
+float[] bandpassed = DSP.FiltFilt(b_bp, a_bp, signal);
+float[] bandstop = DSP.FiltFilt(b_bs, a_bs, signal);
+
+// Verify complementary: bandpassed + bandstop ≈ original (approximately)
+for (int i = 0; i < signal.Length; i++)
+{
+    float reconstructed = bandpassed[i] + bandstop[i];
+    Debug.Assert(Mathf.Abs(reconstructed - signal[i]) < 0.1f);
+}
+```
 
 ---
 

@@ -10,10 +10,11 @@ Step-by-step guides for learning SpectraCore DSP in Unity.
 4. [Tutorial 3: Beat Detection and Visualization](#tutorial-3-beat-detection-and-visualization)
 5. [Tutorial 4: Custom Audio Effect Processor](#tutorial-4-custom-audio-effect-processor)
 6. [Tutorial 5: Building a Spectrogram](#tutorial-5-building-a-spectrogram)
-7. [Integration Guide](#integration-guide)
-8. [Best Practices](#best-practices)
-9. [Quick Start Recipes](#quick-start-recipes)
-10. [Troubleshooting](#troubleshooting)
+7. [Tutorial 6: Bandpass & Bandstop Filters](#tutorial-6-bandpass--bandstop-filters) ⭐ NEW
+8. [Integration Guide](#integration-guide)
+9. [Best Practices](#best-practices)
+10. [Quick Start Recipes](#quick-start-recipes)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1943,6 +1944,329 @@ void Update()
 3. **Add screenshot export:** Save spectrogram as PNG
 4. **Add harmonic tracking:** Highlight harmonic series
 5. **Add onset markers:** Show detected beats on spectrogram
+
+---
+
+## Tutorial 6: Bandpass & Bandstop Filters ⭐ NEW
+
+**Goal:** Design and apply bandpass/bandstop filters for practical audio processing
+
+**Time:** 25 minutes
+
+**What You'll Build:** A speech enhancement filter and hum removal system
+
+---
+
+### Step 1: Understanding Bandpass Filters
+
+A **bandpass filter** isolates a specific frequency band:
+- Attenuates frequencies below `lowFreq`
+- Passes frequencies between `lowFreq` and `highFreq`
+- Attenuates frequencies above `highFreq`
+
+**Use Cases:**
+- Speech enhancement (60 Hz - 3.5 kHz)
+- Acoustic analysis (80 Hz - 5 kHz)
+- Music frequency band separation (bass/mid/treble)
+
+**Bandstop (Notch) Filter** does the opposite:
+- Passes low and high frequencies
+- Attenuates a specific band (the notch)
+
+**Use Cases:**
+- Removing 50/60 Hz mains hum
+- Eliminating quantization noise
+- Removing ultrasonic artifacts
+
+---
+
+### Step 2: Design a Speech Enhancement Filter
+
+Create `SpeechEnhancer.cs`:
+
+```csharp
+using UnityEngine;
+using Spectra;
+
+public class SpeechEnhancer : MonoBehaviour
+{
+    [Header("Filter Settings")]
+    [SerializeField] private int filterOrder = 4;
+    [SerializeField] private AudioSource audioSource;
+
+    private StreamingIIRFilter speechFilter;
+    private float sampleRate;
+
+    void Start()
+    {
+        sampleRate = AudioSettings.outputSampleRate;
+
+        // Speech bandwidth: 60 Hz - 3500 Hz at 44.1 kHz
+        // Normalized: 60/22050 ≈ 0.003, 3500/22050 ≈ 0.159
+        float lowFreq = 60f / (sampleRate / 2f);
+        float highFreq = 3500f / (sampleRate / 2f);
+
+        // Butterworth for smooth response
+        var (b, a) = DSP.Butter(filterOrder, lowFreq, highFreq, FilterType.Bandpass);
+        speechFilter = new StreamingIIRFilter(b, a);
+
+        Debug.Log($"Speech filter: {lowFreq:F4} - {highFreq:F4} (normalized)");
+        Debug.Log($"Coefficients: {b.Length} numerator, {a.Length} denominator");
+    }
+
+    void OnAudioFilterRead(float[] data, int channels)
+    {
+        // Convert to mono
+        float[] mono = new float[data.Length / channels];
+        for (int i = 0; i < mono.Length; i++)
+        {
+            if (channels == 2)
+                mono[i] = (data[i * 2] + data[i * 2 + 1]) * 0.5f;
+            else
+                mono[i] = data[i];
+        }
+
+        // Apply bandpass filter
+        float[] filtered = speechFilter.Process(mono);
+
+        // Convert back to stereo
+        for (int i = 0; i < mono.Length; i++)
+        {
+            data[i * 2] = filtered[i];
+            data[i * 2 + 1] = filtered[i];
+        }
+    }
+
+    void OnDestroy()
+    {
+        speechFilter?.Dispose();
+    }
+}
+```
+
+**Key Points:**
+- Order 4 is typical for speech (8 total for bandpass)
+- Normalized frequency = Hz / (sampleRate / 2)
+- Streaming filter maintains state across audio blocks
+
+---
+
+### Step 3: Design a Hum Removal Filter
+
+Create `HumRemover.cs`:
+
+```csharp
+using UnityEngine;
+using Spectra;
+
+public class HumRemover : MonoBehaviour
+{
+    [Header("Hum Removal")]
+    [SerializeField] private float humFrequency = 60f; // Hz
+    [SerializeField] private float notchWidth = 10f;   // ±Hz around hum frequency
+    [SerializeField] private int filterOrder = 6;       // High order for narrow notch
+
+    private StreamingIIRFilter humFilter;
+    private float sampleRate;
+
+    void Start()
+    {
+        sampleRate = AudioSettings.outputSampleRate;
+
+        // Convert Hz to normalized frequency
+        float centerHumNorm = humFrequency / (sampleRate / 2f);
+        float widthNorm = notchWidth / (sampleRate / 2f);
+
+        // Create bandstop (notch) filter
+        float lowFreq = centerHumNorm - widthNorm / 2f;
+        float highFreq = centerHumNorm + widthNorm / 2f;
+
+        // Clamp to valid range
+        lowFreq = Mathf.Clamp(lowFreq, 0.001f, 0.999f);
+        highFreq = Mathf.Clamp(highFreq, lowFreq + 0.001f, 0.999f);
+
+        // Use high order for sharp notch
+        var (b, a) = DSP.Butter(filterOrder, lowFreq, highFreq, FilterType.Bandstop);
+        humFilter = new StreamingIIRFilter(b, a);
+
+        Debug.Log($"Hum notch: {humFrequency} Hz ± {notchWidth} Hz (order {filterOrder})");
+        Debug.Log($"Normalized: {lowFreq:F4} - {highFreq:F4}");
+    }
+
+    void OnAudioFilterRead(float[] data, int channels)
+    {
+        // Convert to mono
+        float[] mono = new float[data.Length / channels];
+        for (int i = 0; i < mono.Length; i++)
+        {
+            if (channels == 2)
+                mono[i] = (data[i * 2] + data[i * 2 + 1]) * 0.5f;
+            else
+                mono[i] = data[i];
+        }
+
+        // Apply notch filter (removes hum only)
+        float[] filtered = humFilter.Process(mono);
+
+        // Convert back to stereo
+        for (int i = 0; i < mono.Length; i++)
+        {
+            data[i * 2] = filtered[i];
+            data[i * 2 + 1] = filtered[i];
+        }
+    }
+
+    void OnDestroy()
+    {
+        humFilter?.Dispose();
+    }
+}
+```
+
+**Key Points:**
+- Use bandstop to remove unwanted frequency
+- Higher order (6-8) for narrower, sharper notch
+- Preserve audio outside the notch
+
+---
+
+### Step 4: Practical Example - Multi-Band Analysis
+
+Create `MusicBandAnalyzer.cs` to separate bass/mid/treble:
+
+```csharp
+using UnityEngine;
+using Spectra;
+
+public class MusicBandAnalyzer : MonoBehaviour
+{
+    [Header("Music Band Analysis")]
+    [SerializeField] private int filterOrder = 4;
+    [SerializeField] private float bassGain = 0f;   // dB
+    [SerializeField] private float midGain = 0f;    // dB
+    [SerializeField] private float trebleGain = 0f; // dB
+
+    private StreamingIIRFilter bassFilter, midFilter, trebleFilter;
+    private float sampleRate;
+
+    void Start()
+    {
+        sampleRate = AudioSettings.outputSampleRate;
+
+        // Define frequency bands (at 44.1 kHz)
+        // Bass: 20-250 Hz
+        var (b_bass, a_bass) = DSP.Butter(filterOrder,
+            20f / (sampleRate / 2f),
+            250f / (sampleRate / 2f),
+            FilterType.Bandpass);
+        bassFilter = new StreamingIIRFilter(b_bass, a_bass);
+
+        // Mid: 250-2000 Hz
+        var (b_mid, a_mid) = DSP.Butter(filterOrder,
+            250f / (sampleRate / 2f),
+            2000f / (sampleRate / 2f),
+            FilterType.Bandpass);
+        midFilter = new StreamingIIRFilter(b_mid, a_mid);
+
+        // Treble: 2000-20000 Hz
+        var (b_treble, a_treble) = DSP.Butter(filterOrder,
+            2000f / (sampleRate / 2f),
+            20000f / (sampleRate / 2f),
+            FilterType.Bandpass);
+        trebleFilter = new StreamingIIRFilter(b_treble, a_treble);
+
+        Debug.Log("Music band filters initialized");
+    }
+
+    void OnAudioFilterRead(float[] data, int channels)
+    {
+        // Convert to mono
+        float[] mono = new float[data.Length / channels];
+        for (int i = 0; i < mono.Length; i++)
+        {
+            mono[i] = channels == 2
+                ? (data[i * 2] + data[i * 2 + 1]) * 0.5f
+                : data[i];
+        }
+
+        // Extract bands
+        float[] bass = bassFilter.Process(mono);
+        float[] mid = midFilter.Process(mono);
+        float[] treble = trebleFilter.Process(mono);
+
+        // Apply gains (dB → linear)
+        float bassMultiplier = Mathf.Pow(10f, bassGain / 20f);
+        float midMultiplier = Mathf.Pow(10f, midGain / 20f);
+        float trebleMultiplier = Mathf.Pow(10f, trebleGain / 20f);
+
+        // Combine
+        for (int i = 0; i < mono.Length; i++)
+        {
+            float mixed = bass[i] * bassMultiplier +
+                         mid[i] * midMultiplier +
+                         treble[i] * trebleMultiplier;
+
+            // Convert back to stereo
+            data[i * 2] = mixed;
+            data[i * 2 + 1] = mixed;
+        }
+    }
+
+    void OnDestroy()
+    {
+        bassFilter?.Dispose();
+        midFilter?.Dispose();
+        trebleFilter?.Dispose();
+    }
+}
+```
+
+---
+
+### Step 5: Verify Your Filter (Editor Test)
+
+In the Unity Editor:
+
+1. **Create Audio Test Scene:**
+   - Add an AudioSource with a music file
+   - Add SpeechEnhancer or HumRemover script
+   - Play and compare before/after
+
+2. **Inspect Frequency Response:**
+   ```csharp
+   // In Editor script or console
+   float lowFreq = 0.003f;    // 60 Hz at 44.1 kHz
+   float highFreq = 0.159f;   // 3500 Hz
+   var (b, a) = DSP.Butter(4, lowFreq, highFreq, FilterType.Bandpass);
+   var (mag, phase, freqs) = DSP.Freqz(b, a, 512);
+
+   // Check gains
+   Debug.Log($"DC gain: {20 * Mathf.Log10(mag[0]):F1} dB");
+   Debug.Log($"Mid gain: {20 * Mathf.Log10(mag[256]):F1} dB");
+   Debug.Log($"Nyquist gain: {20 * Mathf.Log10(mag[511]):F1} dB");
+   ```
+
+---
+
+### What You Learned
+
+✅ Bandpass filter design and application
+✅ Bandstop (notch) filter for removing specific frequencies
+✅ Dual-frequency API (`Butter(order, lowFreq, highFreq, type)`)
+✅ Order doubling effect (order N → 2N for bandpass)
+✅ Practical audio processing (speech, hum removal, multi-band)
+✅ Real-time streaming with state preservation
+✅ Frequency normalization (Hz ↔ normalized)
+
+---
+
+### Challenges
+
+1. **Add parametric EQ:** Adjustable bandpass filters
+2. **Add graphic EQ:** 10-band fixed-frequency analyzer
+3. **Add dynamic ranges:** Real-time frequency monitoring
+4. **Add visualization:** Show which frequencies are being amplified/reduced
+5. **Add adaptive filters:** Change bands based on incoming audio content
 
 ---
 
