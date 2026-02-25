@@ -121,6 +121,120 @@ namespace Spectra
         }
 
         /// <summary>
+        /// Design a Butterworth bandpass or bandstop filter.
+        /// </summary>
+        /// <param name="order">Filter order</param>
+        /// <param name="lowFreq">Lower normalized frequency</param>
+        /// <param name="highFreq">Upper normalized frequency</param>
+        /// <param name="type">Filter type (Bandpass or Bandstop)</param>
+        /// <returns>Tuple of (b, a) filter coefficients</returns>
+        public static (float[] b, float[] a) Butter(int order, float lowFreq, float highFreq,
+            FilterType type)
+        {
+            // Maximum possible size for bandpass/bandstop (will be 2*order + 1)
+            int coeffSize = SpectraNative.spectra_iir_coeff_size(order * 2);
+            float[] b = new float[coeffSize];
+            float[] a = new float[coeffSize];
+            int bLen = coeffSize, aLen = coeffSize;
+
+            int result = SpectraNative.spectra_butter_bp(
+                order, lowFreq, highFreq, (int)type, b, ref bLen, a, ref aLen);
+
+            if (result != 0)
+                throw new SpectraException("Failed to design Butterworth filter");
+
+            Array.Resize(ref b, bLen);
+            Array.Resize(ref a, aLen);
+            return (b, a);
+        }
+
+        /// <summary>
+        /// Design a Chebyshev Type I bandpass or bandstop filter.
+        /// </summary>
+        /// <param name="order">Filter order</param>
+        /// <param name="rippleDb">Passband ripple in dB</param>
+        /// <param name="lowFreq">Lower normalized frequency</param>
+        /// <param name="highFreq">Upper normalized frequency</param>
+        /// <param name="type">Filter type (Bandpass or Bandstop)</param>
+        /// <returns>Tuple of (b, a) filter coefficients</returns>
+        public static (float[] b, float[] a) Cheby1(int order, float rippleDb, float lowFreq,
+            float highFreq, FilterType type)
+        {
+            int coeffSize = SpectraNative.spectra_iir_coeff_size(order * 2);
+            float[] b = new float[coeffSize];
+            float[] a = new float[coeffSize];
+            int bLen = coeffSize, aLen = coeffSize;
+
+            int result = SpectraNative.spectra_cheby1_bp(
+                order, rippleDb, lowFreq, highFreq, (int)type, b, ref bLen, a, ref aLen);
+
+            if (result != 0)
+                throw new SpectraException("Failed to design Chebyshev Type I filter");
+
+            Array.Resize(ref b, bLen);
+            Array.Resize(ref a, aLen);
+            return (b, a);
+        }
+
+        /// <summary>
+        /// Design a Chebyshev Type II bandpass or bandstop filter.
+        /// </summary>
+        /// <param name="order">Filter order</param>
+        /// <param name="stopbandDb">Stopband attenuation in dB</param>
+        /// <param name="lowFreq">Lower normalized frequency</param>
+        /// <param name="highFreq">Upper normalized frequency</param>
+        /// <param name="type">Filter type (Bandpass or Bandstop)</param>
+        /// <returns>Tuple of (b, a) filter coefficients</returns>
+        public static (float[] b, float[] a) Cheby2(int order, float stopbandDb, float lowFreq,
+            float highFreq, FilterType type)
+        {
+            int coeffSize = SpectraNative.spectra_iir_coeff_size(order * 2);
+            float[] b = new float[coeffSize];
+            float[] a = new float[coeffSize];
+            int bLen = coeffSize, aLen = coeffSize;
+
+            int result = SpectraNative.spectra_cheby2_bp(
+                order, stopbandDb, lowFreq, highFreq, (int)type, b, ref bLen, a, ref aLen);
+
+            if (result != 0)
+                throw new SpectraException("Failed to design Chebyshev Type II filter");
+
+            Array.Resize(ref b, bLen);
+            Array.Resize(ref a, aLen);
+            return (b, a);
+        }
+
+        /// <summary>
+        /// Design an Elliptic (Cauer) bandpass or bandstop filter.
+        /// </summary>
+        /// <param name="order">Filter order</param>
+        /// <param name="passbandRippleDb">Passband ripple in dB</param>
+        /// <param name="stopbandDb">Stopband attenuation in dB</param>
+        /// <param name="lowFreq">Lower normalized frequency</param>
+        /// <param name="highFreq">Upper normalized frequency</param>
+        /// <param name="type">Filter type (Bandpass or Bandstop)</param>
+        /// <returns>Tuple of (b, a) filter coefficients</returns>
+        public static (float[] b, float[] a) Ellip(int order, float passbandRippleDb,
+            float stopbandDb, float lowFreq, float highFreq, FilterType type)
+        {
+            int coeffSize = SpectraNative.spectra_iir_coeff_size(order * 2);
+            float[] b = new float[coeffSize];
+            float[] a = new float[coeffSize];
+            int bLen = coeffSize, aLen = coeffSize;
+
+            int result = SpectraNative.spectra_ellip_bp(
+                order, passbandRippleDb, stopbandDb, lowFreq, highFreq, (int)type,
+                b, ref bLen, a, ref aLen);
+
+            if (result != 0)
+                throw new SpectraException("Failed to design Elliptic filter");
+
+            Array.Resize(ref b, bLen);
+            Array.Resize(ref a, aLen);
+            return (b, a);
+        }
+
+        /// <summary>
         /// Apply a digital filter to a signal.
         /// Equivalent to MATLAB: y = filter(b, a, x)
         /// </summary>

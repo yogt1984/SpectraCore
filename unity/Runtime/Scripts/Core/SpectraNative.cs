@@ -201,6 +201,55 @@ namespace Spectra
             [Out] float[] a,
             ref int aLen);
 
+        // Dual-frequency overloads for bandpass/bandstop
+        [DllImport(LibraryName)]
+        public static extern int spectra_butter_bp(
+            int order,
+            float lowFreq,
+            float highFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_cheby1_bp(
+            int order,
+            float rippleDb,
+            float lowFreq,
+            float highFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_cheby2_bp(
+            int order,
+            float stopbandDb,
+            float lowFreq,
+            float highFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_ellip_bp(
+            int order,
+            float passbandRippleDb,
+            float stopbandDb,
+            float lowFreq,
+            float highFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
         [DllImport(LibraryName)]
         public static extern int spectra_iir_coeff_size(int order);
 

@@ -53,6 +53,17 @@ FilterCoefficients cheby1(int order, float ripple_db, float normalized_freq,
                           FilterType type = FilterType::Lowpass);
 
 /**
+ * @brief Design Chebyshev Type I bandpass/bandstop filter
+ * @param order Filter order
+ * @param ripple_db Maximum passband ripple in dB
+ * @param low_freq Lower normalized cutoff frequency
+ * @param high_freq Upper normalized cutoff frequency
+ * @param type Filter type (must be Bandpass or Bandstop)
+ * @return Filter coefficients
+ */
+FilterCoefficients cheby1(int order, float ripple_db, float low_freq, float high_freq, FilterType type);
+
+/**
  * @brief Design Chebyshev Type II filter
  *
  * Chebyshev Type II filters have monotonic passband and ripple in stopband.
@@ -66,6 +77,17 @@ FilterCoefficients cheby1(int order, float ripple_db, float normalized_freq,
  */
 FilterCoefficients cheby2(int order, float stopband_db, float normalized_freq,
                           FilterType type = FilterType::Lowpass);
+
+/**
+ * @brief Design Chebyshev Type II bandpass/bandstop filter
+ * @param order Filter order
+ * @param stopband_db Minimum stopband attenuation in dB
+ * @param low_freq Lower normalized cutoff frequency
+ * @param high_freq Upper normalized cutoff frequency
+ * @param type Filter type (must be Bandpass or Bandstop)
+ * @return Filter coefficients
+ */
+FilterCoefficients cheby2(int order, float stopband_db, float low_freq, float high_freq, FilterType type);
 
 /**
  * @brief Design Elliptic (Cauer) filter
@@ -82,6 +104,19 @@ FilterCoefficients cheby2(int order, float stopband_db, float normalized_freq,
  */
 FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
                          float normalized_freq, FilterType type = FilterType::Lowpass);
+
+/**
+ * @brief Design Elliptic (Cauer) bandpass/bandstop filter
+ * @param order Filter order
+ * @param passband_ripple_db Maximum passband ripple in dB
+ * @param stopband_db Minimum stopband attenuation in dB
+ * @param low_freq Lower normalized cutoff frequency
+ * @param high_freq Upper normalized cutoff frequency
+ * @param type Filter type (must be Bandpass or Bandstop)
+ * @return Filter coefficients
+ */
+FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
+                         float low_freq, float high_freq, FilterType type);
 
 /**
  * @brief Design Bessel filter

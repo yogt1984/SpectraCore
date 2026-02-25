@@ -273,6 +273,55 @@ SPECTRA_API int spectra_iir_coeff_size(int order) {
     return spectra::iir_coeff_size(order);
 }
 
+// Dual-frequency bandpass/bandstop filter design
+SPECTRA_API int spectra_butter_bp(int order, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::butter(order, low_freq, high_freq,
+                                   static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
+SPECTRA_API int spectra_cheby1_bp(int order, float ripple_db, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::cheby1(order, ripple_db, low_freq, high_freq,
+                                   static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
+SPECTRA_API int spectra_cheby2_bp(int order, float stopband_db, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::cheby2(order, stopband_db, low_freq, high_freq,
+                                   static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
+SPECTRA_API int spectra_ellip_bp(int order, float passband_ripple_db, float stopband_db,
+                                  float low_freq, float high_freq, SpectraFilterType type,
+                                  float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::ellip(order, passband_ripple_db, stopband_db, low_freq, high_freq,
+                                  static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
 // Filter application
 SPECTRA_API int spectra_lfilter(const float* b, int b_len,
                                  const float* a, int a_len,

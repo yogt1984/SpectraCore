@@ -138,6 +138,24 @@ SPECTRA_API int spectra_ellip(int order, float passband_ripple_db, float stopban
                                float normalized_freq, SpectraFilterType type,
                                float* b, int* b_len, float* a, int* a_len);
 
+/* Dual-frequency overloads for bandpass/bandstop filters */
+
+SPECTRA_API int spectra_butter_bp(int order, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len);
+
+SPECTRA_API int spectra_cheby1_bp(int order, float ripple_db, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len);
+
+SPECTRA_API int spectra_cheby2_bp(int order, float stopband_db, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len);
+
+SPECTRA_API int spectra_ellip_bp(int order, float passband_ripple_db, float stopband_db,
+                                  float low_freq, float high_freq, SpectraFilterType type,
+                                  float* b, int* b_len, float* a, int* a_len);
+
 SPECTRA_API int spectra_iir_coeff_size(int order);
 
 /* ============================================================================

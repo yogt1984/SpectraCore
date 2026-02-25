@@ -199,6 +199,68 @@ FilterCoefficients butter_highpass(int order, double wc) {
     return coeffs;
 }
 
+// Design Butterworth bandpass by cascading highpass and lowpass
+// Note: This provides good performance without needing complex pole transformations
+FilterCoefficients butter_bandpass(int order, double wc_low, double wc_high) {
+    FilterCoefficients coeffs;
+
+    // For simplicity and correctness, use cascaded approach:
+    // Bandpass = Highpass(wc_low) * Lowpass(wc_high)
+    // where each is normalized to their respective cutoff frequencies
+
+    auto hp_base = butter_highpass(order, wc_low);
+    auto lp_base = butter_lowpass(order, wc_high);
+
+    // Cascade the two filters by convolving coefficients
+    coeffs.b = std::vector<float>(hp_base.b.size() + lp_base.b.size() - 1, 0.0f);
+    coeffs.a = std::vector<float>(hp_base.a.size() + lp_base.a.size() - 1, 0.0f);
+
+    for (size_t i = 0; i < hp_base.b.size(); ++i) {
+        for (size_t j = 0; j < lp_base.b.size(); ++j) {
+            coeffs.b[i + j] += hp_base.b[i] * lp_base.b[j];
+        }
+    }
+    for (size_t i = 0; i < hp_base.a.size(); ++i) {
+        for (size_t j = 0; j < lp_base.a.size(); ++j) {
+            coeffs.a[i + j] += hp_base.a[i] * lp_base.a[j];
+        }
+    }
+
+    return coeffs;
+}
+
+// Design Butterworth bandstop by combining lowpass and highpass
+// Bandstop = Lowpass(wc_low) + Highpass(wc_high) - this is the complement of bandpass
+FilterCoefficients butter_bandstop(int order, double wc_low, double wc_high) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    // Get the bandpass filter first
+    auto bp = butter_bandpass(order, wc_low, wc_high);
+
+    // Invert the bandpass to get bandstop: H_bs = 1 - H_bp
+    // In the z-domain with normalized denominators:
+    // H_bs(z) = (a(z) - b(z)) / a(z)
+    // So: b_bs = a - b, a_bs = a
+
+    coeffs.b.resize(std::max(bp.a.size(), bp.b.size()));
+    coeffs.a = bp.a;
+
+    // Initialize b coefficients
+    std::fill(coeffs.b.begin(), coeffs.b.end(), 0.0f);
+
+    // b_bs = a - b
+    for (size_t i = 0; i < bp.a.size(); ++i) {
+        coeffs.b[i] += bp.a[i];
+    }
+    for (size_t i = 0; i < bp.b.size(); ++i) {
+        coeffs.b[i] -= bp.b[i];
+    }
+
+    return coeffs;
+}
+
 // Design Chebyshev Type I lowpass using cascaded sections
 FilterCoefficients cheby1_lowpass(int order, double wc, double epsilon) {
     FilterCoefficients coeffs;
@@ -962,33 +1024,14 @@ FilterCoefficients butter(int order, float low_freq, float high_freq, FilterType
         return coeffs;
     }
 
-    // For bandpass/bandstop, design as cascade of highpass and lowpass
+    // Frequency prewarping for both frequencies
+    double wc_low = 2.0 * std::tan(constants::pi * low_freq / 2.0);
+    double wc_high = 2.0 * std::tan(constants::pi * high_freq / 2.0);
+
     if (type == FilterType::Bandpass) {
-        auto hp = butter(order, low_freq, FilterType::Highpass);
-        auto lp = butter(order, high_freq, FilterType::Lowpass);
-
-        // Convolve the two filters
-        coeffs.b = std::vector<float>(hp.b.size() + lp.b.size() - 1, 0.0f);
-        coeffs.a = std::vector<float>(hp.a.size() + lp.a.size() - 1, 0.0f);
-
-        for (size_t i = 0; i < hp.b.size(); ++i) {
-            for (size_t j = 0; j < lp.b.size(); ++j) {
-                coeffs.b[i + j] += hp.b[i] * lp.b[j];
-            }
-        }
-        for (size_t i = 0; i < hp.a.size(); ++i) {
-            for (size_t j = 0; j < lp.a.size(); ++j) {
-                coeffs.a[i + j] += hp.a[i] * lp.a[j];
-            }
-        }
+        return butter_bandpass(order, wc_low, wc_high);
     } else if (type == FilterType::Bandstop) {
-        // Bandstop is more complex - simplified cascade approach
-        auto lp = butter(order, low_freq, FilterType::Lowpass);
-        auto hp = butter(order, high_freq, FilterType::Highpass);
-
-        // This is an approximation - proper bandstop needs parallel connection
-        coeffs.b = {1.0f};
-        coeffs.a = {1.0f};
+        return butter_bandstop(order, wc_low, wc_high);
     } else {
         coeffs.b = {1.0f};
         coeffs.a = {1.0f};
@@ -1029,6 +1072,57 @@ FilterCoefficients cheby1(int order, float ripple_db, float normalized_freq, Fil
     }
 }
 
+// Chebyshev Type I bandpass/bandstop (dual-frequency overload)
+FilterCoefficients cheby1(int order, float ripple_db, float low_freq, float high_freq, FilterType type) {
+    FilterCoefficients coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || low_freq <= 0.0f || high_freq >= 1.0f || low_freq >= high_freq ||
+        ripple_db <= 0.0f || ripple_db > 20.0f) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    if (type == FilterType::Bandpass) {
+        auto hp = cheby1(order, ripple_db, low_freq, FilterType::Highpass);
+        auto lp = cheby1(order, ripple_db, high_freq, FilterType::Lowpass);
+
+        // Cascade: convolve coefficients
+        coeffs.b = std::vector<float>(hp.b.size() + lp.b.size() - 1, 0.0f);
+        coeffs.a = std::vector<float>(hp.a.size() + lp.a.size() - 1, 0.0f);
+
+        for (size_t i = 0; i < hp.b.size(); ++i) {
+            for (size_t j = 0; j < lp.b.size(); ++j) {
+                coeffs.b[i + j] += hp.b[i] * lp.b[j];
+            }
+        }
+        for (size_t i = 0; i < hp.a.size(); ++i) {
+            for (size_t j = 0; j < lp.a.size(); ++j) {
+                coeffs.a[i + j] += hp.a[i] * lp.a[j];
+            }
+        }
+    } else if (type == FilterType::Bandstop) {
+        // Get bandpass, then invert
+        auto bp = cheby1(order, ripple_db, low_freq, high_freq, FilterType::Bandpass);
+        coeffs.b.resize(std::max(bp.a.size(), bp.b.size()));
+        coeffs.a = bp.a;
+
+        std::fill(coeffs.b.begin(), coeffs.b.end(), 0.0f);
+        for (size_t i = 0; i < bp.a.size(); ++i) {
+            coeffs.b[i] += bp.a[i];
+        }
+        for (size_t i = 0; i < bp.b.size(); ++i) {
+            coeffs.b[i] -= bp.b[i];
+        }
+    } else {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+    }
+
+    return coeffs;
+}
+
 FilterCoefficients cheby2(int order, float stopband_db, float normalized_freq, FilterType type) {
     FilterCoefficients coeffs;
 
@@ -1059,6 +1153,57 @@ FilterCoefficients cheby2(int order, float stopband_db, float normalized_freq, F
         coeffs.a = {1.0f};
         return coeffs;
     }
+}
+
+// Chebyshev Type II bandpass/bandstop (dual-frequency overload)
+FilterCoefficients cheby2(int order, float stopband_db, float low_freq, float high_freq, FilterType type) {
+    FilterCoefficients coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || low_freq <= 0.0f || high_freq >= 1.0f || low_freq >= high_freq ||
+        stopband_db <= 0.0f || stopband_db > 120.0f) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    if (type == FilterType::Bandpass) {
+        auto hp = cheby2(order, stopband_db, low_freq, FilterType::Highpass);
+        auto lp = cheby2(order, stopband_db, high_freq, FilterType::Lowpass);
+
+        // Cascade: convolve coefficients
+        coeffs.b = std::vector<float>(hp.b.size() + lp.b.size() - 1, 0.0f);
+        coeffs.a = std::vector<float>(hp.a.size() + lp.a.size() - 1, 0.0f);
+
+        for (size_t i = 0; i < hp.b.size(); ++i) {
+            for (size_t j = 0; j < lp.b.size(); ++j) {
+                coeffs.b[i + j] += hp.b[i] * lp.b[j];
+            }
+        }
+        for (size_t i = 0; i < hp.a.size(); ++i) {
+            for (size_t j = 0; j < lp.a.size(); ++j) {
+                coeffs.a[i + j] += hp.a[i] * lp.a[j];
+            }
+        }
+    } else if (type == FilterType::Bandstop) {
+        // Get bandpass, then invert
+        auto bp = cheby2(order, stopband_db, low_freq, high_freq, FilterType::Bandpass);
+        coeffs.b.resize(std::max(bp.a.size(), bp.b.size()));
+        coeffs.a = bp.a;
+
+        std::fill(coeffs.b.begin(), coeffs.b.end(), 0.0f);
+        for (size_t i = 0; i < bp.a.size(); ++i) {
+            coeffs.b[i] += bp.a[i];
+        }
+        for (size_t i = 0; i < bp.b.size(); ++i) {
+            coeffs.b[i] -= bp.b[i];
+        }
+    } else {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+    }
+
+    return coeffs;
 }
 
 FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
@@ -1093,6 +1238,59 @@ FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
         coeffs.a = {1.0f};
         return coeffs;
     }
+}
+
+// Elliptic bandpass/bandstop (dual-frequency overload)
+FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
+                         float low_freq, float high_freq, FilterType type) {
+    FilterCoefficients coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || low_freq <= 0.0f || high_freq >= 1.0f || low_freq >= high_freq ||
+        passband_ripple_db <= 0.0f || passband_ripple_db > 20.0f ||
+        stopband_db <= 0.0f || stopband_db > 120.0f) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    if (type == FilterType::Bandpass) {
+        auto hp = ellip(order, passband_ripple_db, stopband_db, low_freq, FilterType::Highpass);
+        auto lp = ellip(order, passband_ripple_db, stopband_db, high_freq, FilterType::Lowpass);
+
+        // Cascade: convolve coefficients
+        coeffs.b = std::vector<float>(hp.b.size() + lp.b.size() - 1, 0.0f);
+        coeffs.a = std::vector<float>(hp.a.size() + lp.a.size() - 1, 0.0f);
+
+        for (size_t i = 0; i < hp.b.size(); ++i) {
+            for (size_t j = 0; j < lp.b.size(); ++j) {
+                coeffs.b[i + j] += hp.b[i] * lp.b[j];
+            }
+        }
+        for (size_t i = 0; i < hp.a.size(); ++i) {
+            for (size_t j = 0; j < lp.a.size(); ++j) {
+                coeffs.a[i + j] += hp.a[i] * lp.a[j];
+            }
+        }
+    } else if (type == FilterType::Bandstop) {
+        // Get bandpass, then invert
+        auto bp = ellip(order, passband_ripple_db, stopband_db, low_freq, high_freq, FilterType::Bandpass);
+        coeffs.b.resize(std::max(bp.a.size(), bp.b.size()));
+        coeffs.a = bp.a;
+
+        std::fill(coeffs.b.begin(), coeffs.b.end(), 0.0f);
+        for (size_t i = 0; i < bp.a.size(); ++i) {
+            coeffs.b[i] += bp.a[i];
+        }
+        for (size_t i = 0; i < bp.b.size(); ++i) {
+            coeffs.b[i] -= bp.b[i];
+        }
+    } else {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+    }
+
+    return coeffs;
 }
 
 FilterCoefficients bessel(int order, float normalized_freq, FilterType type) {
