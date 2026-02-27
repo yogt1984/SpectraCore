@@ -354,14 +354,125 @@ float[] output = DSP.FiltFilt(b, a, input);
 - Use when minimum order/steepest rolloff is critical
 - Often achieves desired response with lower order
 
+---
+
+#### Bessel
+
+Design a Bessel (Thomson) filter with maximally flat group delay.
+
+**Single-Frequency Overload (Lowpass/Highpass):**
+```csharp
+public static (float[] b, float[] a) Bessel(
+    int order,
+    float normalizedFreq,
+    FilterType type = FilterType.Lowpass)
+```
+
+**Dual-Frequency Overload (Bandpass/Bandstop):**
+```csharp
+public static (float[] b, float[] a) Bessel(
+    int order,
+    float lowFreq,
+    float highFreq,
+    FilterType type)  // Bandpass or Bandstop
+```
+
+**Parameters:**
+- `order` - Filter order (1 to 10)
+- `normalizedFreq` (single-freq) - Cutoff frequency (Nyquist-normalized, 0.0 to 1.0)
+- `lowFreq` (dual-freq) - Lower frequency boundary
+- `highFreq` (dual-freq) - Upper frequency boundary
+- `type` - Filter type
+
+**Returns:**
+- Tuple of (`b`, `a`) filter coefficients
+
+**MATLAB Equivalent:**
+```matlab
+[b, a] = besself(order, Wn, type);      % Analog Bessel design
+[bd, ad] = bilinear(b, a, fs);          % Convert to digital
+```
+
+**Example - Pulse-Preserving Lowpass:**
+```csharp
+// Design 4th-order Bessel lowpass for minimal overshoot
+var (b, a) = DSP.Bessel(4, 0.3f, FilterType.Lowpass);
+
+// Process pulse signal with minimal distortion
+float[] pulse = GeneratePulse();
+float[] output = DSP.FiltFilt(b, a, pulse);
+
+// Compare with Butterworth (Bessel has less overshoot/ringing)
+var (bButter, aButter) = DSP.Butter(4, 0.3f, FilterType.Lowpass);
+float[] butterOutput = DSP.FiltFilt(bButter, aButter, pulse);
+```
+
+**Example - Dual Frequency (Bandpass):**
+```csharp
+// Design 3rd-order Bessel bandpass for transient-rich signals
+float lowFreq = 200f / (44100f / 2f);    // ~0.0090
+float highFreq = 3500f / (44100f / 2f);  // ~0.1588
+var (b, a) = DSP.Bessel(3, lowFreq, highFreq, FilterType.Bandpass);
+
+// Ideal for speech/percussion with minimal phase distortion
+float[] output = DSP.FiltFilt(b, a, input);
+```
+
+**Performance:**
+- O(order²) complexity
+- Similar to Butterworth
+
+**Key Characteristics:**
+- **Maximally flat group delay** in passband (linear phase)
+- **Minimal overshoot and ringing** in step response
+- Slower rolloff than Butterworth for same order
+- No ripple in passband or stopband
+- Best transient response of all IIR filters
+
+**Use Cases:**
+- Pulse and transient preservation (drum hits, speech plosives)
+- Data transmission (avoid intersymbol interference)
+- Scientific instrumentation (preserve waveform fidelity)
+- Audio applications where phase linearity matters
+- Radar/sonar signal processing
+
+**Group Delay:**
+```csharp
+// Bessel filters have near-constant group delay in passband
+var (b, a) = DSP.Bessel(4, 0.3f, FilterType.Lowpass);
+
+// Measure group delay
+var (mag, phase, freqs) = DSP.Freqz(b, a, 512);
+// Group delay = -d(phase)/d(frequency)
+// For Bessel: approximately constant from DC to cutoff
+```
+
+**Comparison with Butterworth:**
+
+| Characteristic | Butterworth | Bessel |
+|----------------|-------------|--------|
+| Passband flatness | **Maximally flat** | Smooth, not flat |
+| Group delay | Moderate variation | **Flattest** (linear phase) |
+| Step response overshoot | ~5-10% | **<1%** (minimal) |
+| Rolloff steepness | Moderate | **Slower** |
+| Transient fidelity | Good | **Excellent** |
+
+**Notes:**
+- Cutoff frequency is NOT -3dB point (varies with order, typically -3dB to -10dB)
+- Optimized for time-domain performance, not frequency selectivity
+- Higher orders (6-10) may have numerical precision issues at high frequencies (>0.7)
+- For sharp frequency separation, use Butterworth or Chebyshev instead
+- For minimal waveform distortion, Bessel is the best choice
+
 **Filter Comparison:**
 
-| Filter Type | Passband | Stopband | Rolloff | Phase | Use Case |
-|-------------|----------|----------|---------|-------|----------|
-| Butterworth | Flat | Monotonic | Moderate | Best | General audio |
-| Chebyshev I | Ripple | Monotonic | Steep | Good | Sharp cutoffs |
-| Chebyshev II | Flat | Ripple | Steep | Better | Flat passband needed |
-| Elliptic | Ripple | Ripple | Steepest | Worst | Minimum order |
+| Filter Type | Passband | Stopband | Rolloff | Phase | Group Delay | Use Case |
+|-------------|----------|----------|---------|-------|-------------|----------|
+| Butterworth | Flat | Monotonic | Moderate | Best | Moderate | General audio |
+| Bessel | Smooth | Monotonic | Gentle | Linear | **Flattest** | Transient preservation |
+| Chebyshev I | Ripple | Monotonic | Steep | Good | Moderate | Sharp cutoffs |
+| Chebyshev II | Flat | Ripple | Steep | Better | Moderate | Flat passband needed |
+| Elliptic | Ripple | Ripple | Steepest | Worst | Poor | Minimum order |
 
 ---
 

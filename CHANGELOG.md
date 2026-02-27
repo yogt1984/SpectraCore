@@ -5,6 +5,110 @@ All notable changes to SpectraCore will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-27
+
+### Added
+
+#### Bessel (Thomson) Filters ⭐ NEW
+- **Complete Bessel filter implementation** with maximally flat group delay:
+  - Butterworth-style API: `DSP.Bessel(order, normalizedFreq, FilterType)`
+  - Dual-frequency API: `DSP.Bessel(order, lowFreq, highFreq, FilterType.Bandpass)`
+  - Support for all 4 filter types: Lowpass, Highpass, Bandpass, Bandstop
+  - Pre-computed Bessel polynomial poles for orders 1-10
+- **Key characteristics**:
+  - Maximally flat group delay (linear phase response)
+  - Minimal overshoot and ringing (<1% in step response)
+  - Excellent transient preservation
+  - No ripple in passband or stopband
+  - Ideal for pulse signals, speech plosives, drum hits
+- **Use cases**:
+  - Pulse and transient preservation (drums, percussion)
+  - Data transmission (minimal intersymbol interference)
+  - Scientific instrumentation (waveform fidelity)
+  - Audio applications requiring phase linearity
+  - Radar/sonar signal processing
+
+#### WebGL/WebAssembly Support ⭐ NEW
+- **Emscripten build system** for WebAssembly compilation:
+  - `native/cmake/wasm.toolchain.cmake`: Emscripten CMake toolchain
+  - `native/scripts/build_wasm.sh`: Automated WASM build script
+  - Optimized for browser deployment with -O3 and SIMD support
+- **Unity WebGL platform support**:
+  - Platform-conditional imports: `__Internal` for WebGL, `spectra` for native
+  - Automatic plugin selection in Unity builds
+  - Full API compatibility across all platforms
+- **Comprehensive documentation**:
+  - `docs/EmscriptenSetupGuide.md`: Complete setup and build guide
+  - WebGL deployment instructions and troubleshooting
+  - Performance tuning and optimization tips
+
+#### Platform Expansion
+- **iOS support**:
+  - CMake toolchain for iOS builds (arm64, armv7)
+  - Unity iOS plugin structure with proper metadata
+  - Bitcode and ARC support
+- **Android NDK support**:
+  - Multi-ABI builds (armeabi-v7a, arm64-v8a, x86, x86_64)
+  - Automated NDK build scripts
+  - Unity Android plugin structure
+- **Unified cross-platform documentation**:
+  - `docs/CrossPlatformBuildGuide.md`: Complete platform build guide
+  - Platform-specific notes and troubleshooting
+  - Deployment and testing procedures
+
+### Improved
+
+- **Bilinear transform accuracy**:
+  - Fixed critical bug in second-order section bilinear transform
+  - Corrected K-factor calculation: K = a2 + 2*a1 + 4 (was 4 - 2*a1 + a2)
+  - Fixed a2 coefficient: a2 = (a2 - 2*a1 + 4) / K
+  - Results in stable filters across all frequency ranges
+- **Gain normalization**:
+  - New `compute_dc_gain()` and `compute_nyquist_gain()` helper functions
+  - Evaluates H(z) directly at z=1 (DC) and z=-1 (Nyquist) for accurate normalization
+  - Applies to all IIR filters (Butterworth, Chebyshev, Elliptic, Bessel)
+  - Ensures unity gain at DC for lowpass, unity gain at Nyquist for highpass
+
+### Fixed
+
+- Bilinear transform stability issues in Bessel filters
+- DC gain normalization for all lowpass filters
+- Nyquist gain normalization for all highpass filters
+
+### Technical Details
+
+- **Bessel filter design approach**:
+  - Pre-computed normalized Bessel polynomial poles (orders 1-10)
+  - Frequency scaling and bilinear transform for digital implementation
+  - Cascaded second-order sections for numerical stability
+  - Lowpass-to-highpass transformation for highpass filters
+  - Cascaded design for bandpass (HP × LP) and complementary for bandstop
+- **Test coverage**:
+  - 28 comprehensive Bessel filter unit tests
+  - All 110 IIR filter tests passing (Butterworth, Chebyshev, Elliptic, Bessel)
+  - Stability verified for orders 1-10 at frequencies 0.1-0.5
+  - Stability verified for orders 1-4 at frequencies up to 0.9
+- **Performance**:
+  - O(order²) complexity, similar to Butterworth
+  - Real-time capable for all practical filter orders
+- **Backward compatibility**:
+  - No breaking changes to v1.0 or v1.1 API
+  - Only additions and bug fixes
+
+### Filter Comparison Update
+
+Updated filter comparison table with Bessel characteristics:
+
+| Filter Type | Passband | Stopband | Rolloff | Phase | Group Delay | Use Case |
+|-------------|----------|----------|---------|-------|-------------|----------|
+| Butterworth | Flat | Monotonic | Moderate | Best | Moderate | General audio |
+| **Bessel** | Smooth | Monotonic | Gentle | Linear | **Flattest** | Transient preservation |
+| Chebyshev I | Ripple | Monotonic | Steep | Good | Moderate | Sharp cutoffs |
+| Chebyshev II | Flat | Ripple | Steep | Better | Moderate | Flat passband |
+| Elliptic | Ripple | Ripple | Steepest | Worst | Poor | Minimum order |
+
+---
+
 ## [1.1.0] - 2026-02-25
 
 ### Added
