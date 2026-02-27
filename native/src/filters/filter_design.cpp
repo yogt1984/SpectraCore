@@ -1082,13 +1082,34 @@ std::vector<std::complex<double>> bessel_poles(int order) {
     return poles;
 }
 
-// Get DC gain correction factor for Bessel filters
-double bessel_dc_gain(const std::vector<std::complex<double>>& poles) {
-    double gain = 1.0;
-    for (const auto& pole : poles) {
-        gain *= std::abs(pole);
+// Compute DC gain by evaluating H(z) at z=1
+double compute_dc_gain(const FilterCoefficients& coeffs) {
+    double num = 0.0;
+    for (float b : coeffs.b) {
+        num += b;
     }
-    return gain;
+    double den = 0.0;
+    for (float a : coeffs.a) {
+        den += a;
+    }
+    return num / den;
+}
+
+// Compute Nyquist gain by evaluating H(z) at z=-1
+double compute_nyquist_gain(const FilterCoefficients& coeffs) {
+    double num = 0.0;
+    double sign = 1.0;
+    for (float b : coeffs.b) {
+        num += sign * b;
+        sign = -sign;
+    }
+    double den = 0.0;
+    sign = 1.0;
+    for (float a : coeffs.a) {
+        den += sign * a;
+        sign = -sign;
+    }
+    return num / den;
 }
 
 } // anonymous namespace
@@ -1417,9 +1438,6 @@ FilterCoefficients bessel_lowpass(int order, double wc) {
         pole *= wc;
     }
 
-    // Get DC gain for normalization
-    double dc_gain = bessel_dc_gain(poles);
-
     // Process poles: complex pairs and real poles
     for (size_t i = 0; i < poles.size(); ++i) {
         auto pole = poles[i];
@@ -1452,13 +1470,14 @@ FilterCoefficients bessel_lowpass(int order, double wc) {
             double a2_s = pole_mag_sq;
 
             // Bilinear transform: s = 2*(z-1)/(z+1)
-            // After simplification:
-            double K = 4.0 - 2.0 * a1_s + a2_s;
+            // For H(s) = N / (s^2 + a1_s*s + a2_s)
+            // Digital coefficients:
+            double K = a2_s + 2.0 * a1_s + 4.0;
             double b0 = wc2 / K;
             double b1 = 2.0 * wc2 / K;
             double b2 = wc2 / K;
             double a1 = (2.0 * a2_s - 8.0) / K;
-            double a2 = (4.0 + 2.0 * a1_s + a2_s) / K;
+            double a2 = (a2_s - 2.0 * a1_s + 4.0) / K;
 
             cascade_sos(coeffs, b0, b1, b2, 1.0, a1, a2);
 
@@ -1469,10 +1488,13 @@ FilterCoefficients bessel_lowpass(int order, double wc) {
         }
     }
 
-    // Apply DC gain correction
-    double gain_correction = 1.0 / dc_gain;
-    for (auto& b : coeffs.b) {
-        b *= static_cast<float>(gain_correction);
+    // Apply DC gain correction to achieve unity gain at DC
+    double actual_dc_gain = compute_dc_gain(coeffs);
+    if (std::abs(actual_dc_gain) > 1e-10) {
+        double gain_correction = 1.0 / actual_dc_gain;
+        for (auto& b : coeffs.b) {
+            b *= static_cast<float>(gain_correction);
+        }
     }
 
     return coeffs;
@@ -1492,9 +1514,6 @@ FilterCoefficients bessel_highpass(int order, double wc) {
     for (auto& pole : poles) {
         pole = (wc * wc) / pole;
     }
-
-    // Get gain (highpass has gain at Nyquist = 1)
-    double nyq_gain = bessel_dc_gain(poles);
 
     // Process poles similar to lowpass
     for (size_t i = 0; i < poles.size(); ++i) {
@@ -1520,12 +1539,12 @@ FilterCoefficients bessel_highpass(int order, double wc) {
             double a1_s = -2.0 * sigma;
             double a2_s = pole_mag_sq;
 
-            double K = 4.0 - 2.0 * a1_s + a2_s;
+            double K = a2_s + 2.0 * a1_s + 4.0;
             double b0 = 4.0 / K;
             double b1 = -8.0 / K;
             double b2 = 4.0 / K;
             double a1 = (2.0 * a2_s - 8.0) / K;
-            double a2 = (4.0 + 2.0 * a1_s + a2_s) / K;
+            double a2 = (a2_s - 2.0 * a1_s + 4.0) / K;
 
             cascade_sos(coeffs, b0, b1, b2, 1.0, a1, a2);
 
@@ -1535,10 +1554,13 @@ FilterCoefficients bessel_highpass(int order, double wc) {
         }
     }
 
-    // Apply Nyquist gain correction for highpass
-    double gain_correction = 1.0 / nyq_gain;
-    for (auto& b : coeffs.b) {
-        b *= static_cast<float>(gain_correction);
+    // Apply Nyquist gain correction to achieve unity gain at Nyquist for highpass
+    double actual_nyq_gain = compute_nyquist_gain(coeffs);
+    if (std::abs(actual_nyq_gain) > 1e-10) {
+        double gain_correction = 1.0 / actual_nyq_gain;
+        for (auto& b : coeffs.b) {
+            b *= static_cast<float>(gain_correction);
+        }
     }
 
     return coeffs;
