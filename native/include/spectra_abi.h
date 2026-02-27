@@ -156,6 +156,13 @@ SPECTRA_API int spectra_ellip_bp(int order, float passband_ripple_db, float stop
                                   float low_freq, float high_freq, SpectraFilterType type,
                                   float* b, int* b_len, float* a, int* a_len);
 
+SPECTRA_API int spectra_bessel(int order, float normalized_freq, SpectraFilterType type,
+                                float* b, int* b_len, float* a, int* a_len);
+
+SPECTRA_API int spectra_bessel_bp(int order, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len);
+
 SPECTRA_API int spectra_iir_coeff_size(int order);
 
 /* ============================================================================

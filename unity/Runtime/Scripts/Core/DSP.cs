@@ -235,6 +235,53 @@ namespace Spectra
         }
 
         /// <summary>
+        /// Design a Bessel (Thomson) filter.
+        /// Bessel filters have maximally flat group delay, providing optimal transient response
+        /// with minimal overshoot and ringing. Best for preserving pulse shapes.
+        /// Equivalent to MATLAB: [b,a] = besself(order, Wn) with bilinear transform
+        /// </summary>
+        public static (float[] b, float[] a) Bessel(int order, float normalizedFreq,
+            FilterType type = FilterType.Lowpass)
+        {
+            int coeffSize = SpectraNative.spectra_iir_coeff_size(order);
+            float[] b = new float[coeffSize];
+            float[] a = new float[coeffSize];
+            int bLen = coeffSize, aLen = coeffSize;
+
+            int result = SpectraNative.spectra_bessel(
+                order, normalizedFreq, (int)type, b, ref bLen, a, ref aLen);
+
+            if (result != 0)
+                throw new SpectraException("Failed to design Bessel filter");
+
+            Array.Resize(ref b, bLen);
+            Array.Resize(ref a, aLen);
+            return (b, a);
+        }
+
+        /// <summary>
+        /// Design a Bessel bandpass or bandstop filter (dual-frequency).
+        /// </summary>
+        public static (float[] b, float[] a) Bessel(int order, float lowFreq,
+            float highFreq, FilterType type)
+        {
+            int coeffSize = SpectraNative.spectra_iir_coeff_size(order * 2);
+            float[] b = new float[coeffSize];
+            float[] a = new float[coeffSize];
+            int bLen = coeffSize, aLen = coeffSize;
+
+            int result = SpectraNative.spectra_bessel_bp(
+                order, lowFreq, highFreq, (int)type, b, ref bLen, a, ref aLen);
+
+            if (result != 0)
+                throw new SpectraException("Failed to design Bessel filter");
+
+            Array.Resize(ref b, bLen);
+            Array.Resize(ref a, aLen);
+            return (b, a);
+        }
+
+        /// <summary>
         /// Apply a digital filter to a signal.
         /// Equivalent to MATLAB: y = filter(b, a, x)
         /// </summary>

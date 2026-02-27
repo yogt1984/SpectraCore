@@ -257,6 +257,27 @@ namespace Spectra
             ref int aLen);
 
         [DllImport(LibraryName)]
+        public static extern int spectra_bessel(
+            int order,
+            float normalizedFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_bessel_bp(
+            int order,
+            float lowFreq,
+            float highFreq,
+            int filterType,
+            [Out] float[] b,
+            ref int bLen,
+            [Out] float[] a,
+            ref int aLen);
+
+        [DllImport(LibraryName)]
         public static extern int spectra_iir_coeff_size(int order);
 
         // ====================================================================

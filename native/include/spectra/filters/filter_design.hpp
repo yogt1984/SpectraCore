@@ -122,15 +122,26 @@ FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
  * @brief Design Bessel filter
  *
  * Bessel filters have maximally flat group delay (linear phase approximation).
+ * Best for preserving pulse/transient shapes with minimal overshoot.
  * Equivalent to MATLAB: [b,a] = besself(order, Wn) with bilinear transform
  *
  * @param order Filter order
- * @param normalized_freq Normalized cutoff frequency
- * @param type Filter type
+ * @param normalized_freq Normalized cutoff frequency (0 to 1, where 1 = Nyquist)
+ * @param type Filter type (lowpass, highpass, bandpass, bandstop)
  * @return Filter coefficients
  */
 FilterCoefficients bessel(int order, float normalized_freq,
                           FilterType type = FilterType::Lowpass);
+
+/**
+ * @brief Design Bessel bandpass/bandstop filter
+ * @param order Filter order
+ * @param low_freq Lower normalized cutoff frequency
+ * @param high_freq Upper normalized cutoff frequency
+ * @param type Filter type (must be Bandpass or Bandstop)
+ * @return Filter coefficients
+ */
+FilterCoefficients bessel(int order, float low_freq, float high_freq, FilterType type);
 
 // ============================================================================
 // FIR Filter Design

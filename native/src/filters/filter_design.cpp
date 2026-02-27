@@ -985,6 +985,112 @@ FilterCoefficients cheby2_highpass(int order, double ws, double epsilon) {
     return coeffs;
 }
 
+// ============================================================================
+// Bessel Filter Helpers
+// ============================================================================
+
+// Get normalized Bessel poles for a given order
+std::vector<std::complex<double>> bessel_poles(int order) {
+    std::vector<std::complex<double>> poles;
+
+    // Pre-computed normalized Bessel poles (group delay normalized)
+    switch (order) {
+        case 1:
+            poles.push_back({-1.0, 0.0});
+            break;
+        case 2:
+            poles.push_back({-1.1016, 0.6360});
+            poles.push_back({-1.1016, -0.6360});
+            break;
+        case 3:
+            poles.push_back({-1.0474, 0.0});
+            poles.push_back({-1.3270, 0.7179});
+            poles.push_back({-1.3270, -0.7179});
+            break;
+        case 4:
+            poles.push_back({-0.9952, 0.5711});
+            poles.push_back({-0.9952, -0.5711});
+            poles.push_back({-1.5069, 0.7206});
+            poles.push_back({-1.5069, -0.7206});
+            break;
+        case 5:
+            poles.push_back({-1.0268, 0.0});
+            poles.push_back({-1.1224, 0.6335});
+            poles.push_back({-1.1224, -0.6335});
+            poles.push_back({-1.6644, 0.7179});
+            poles.push_back({-1.6644, -0.7179});
+            break;
+        case 6:
+            poles.push_back({-0.9606, 0.5124});
+            poles.push_back({-0.9606, -0.5124});
+            poles.push_back({-1.3808, 0.7179});
+            poles.push_back({-1.3808, -0.7179});
+            poles.push_back({-1.8021, 0.7277});
+            poles.push_back({-1.8021, -0.7277});
+            break;
+        case 7:
+            poles.push_back({-1.0138, 0.0});
+            poles.push_back({-1.0509, 0.5892});
+            poles.push_back({-1.0509, -0.5892});
+            poles.push_back({-1.5611, 0.7370});
+            poles.push_back({-1.5611, -0.7370});
+            poles.push_back({-1.9212, 0.7434});
+            poles.push_back({-1.9212, -0.7434});
+            break;
+        case 8:
+            poles.push_back({-0.9324, 0.4617});
+            poles.push_back({-0.9324, -0.4617});
+            poles.push_back({-1.2685, 0.6451});
+            poles.push_back({-1.2685, -0.6451});
+            poles.push_back({-1.7113, 0.7507});
+            poles.push_back({-1.7113, -0.7507});
+            poles.push_back({-2.0277, 0.7583});
+            poles.push_back({-2.0277, -0.7583});
+            break;
+        case 9:
+            poles.push_back({-1.0060, 0.0});
+            poles.push_back({-1.0135, 0.5536});
+            poles.push_back({-1.0135, -0.5536});
+            poles.push_back({-1.4482, 0.6956});
+            poles.push_back({-1.4482, -0.6956});
+            poles.push_back({-1.8441, 0.7626});
+            poles.push_back({-1.8441, -0.7626});
+            poles.push_back({-2.1240, 0.7702});
+            poles.push_back({-2.1240, -0.7702});
+            break;
+        case 10:
+            poles.push_back({-0.9091, 0.4204});
+            poles.push_back({-0.9091, -0.4204});
+            poles.push_back({-1.1921, 0.5888});
+            poles.push_back({-1.1921, -0.5888});
+            poles.push_back({-1.6057, 0.7111});
+            poles.push_back({-1.6057, -0.7111});
+            poles.push_back({-1.9629, 0.7735});
+            poles.push_back({-1.9629, -0.7735});
+            poles.push_back({-2.2121, 0.7814});
+            poles.push_back({-2.2121, -0.7814});
+            break;
+        default:
+            // For orders > 10, use Butterworth approximation as fallback
+            for (int k = 0; k < order; ++k) {
+                double theta = constants::pi * (2.0 * k + 1.0 + order) / (2.0 * order);
+                poles.push_back({std::cos(theta), std::sin(theta)});
+            }
+            break;
+    }
+
+    return poles;
+}
+
+// Get DC gain correction factor for Bessel filters
+double bessel_dc_gain(const std::vector<std::complex<double>>& poles) {
+    double gain = 1.0;
+    for (const auto& pole : poles) {
+        gain *= std::abs(pole);
+    }
+    return gain;
+}
+
 } // anonymous namespace
 
 FilterCoefficients butter(int order, float normalized_freq, FilterType type) {
@@ -1293,12 +1399,252 @@ FilterCoefficients ellip(int order, float passband_ripple_db, float stopband_db,
     return coeffs;
 }
 
-FilterCoefficients bessel(int order, float normalized_freq, FilterType type) {
-    // Placeholder
+// =============================================================================
+// Bessel (Thomson) Filter Design
+// =============================================================================
+
+// Bessel lowpass using pole-based design
+FilterCoefficients bessel_lowpass(int order, double wc) {
     FilterCoefficients coeffs;
     coeffs.b = {1.0f};
     coeffs.a = {1.0f};
+
+    // Get normalized Bessel poles
+    auto poles = bessel_poles(order);
+
+    // Scale poles by cutoff frequency
+    for (auto& pole : poles) {
+        pole *= wc;
+    }
+
+    // Get DC gain for normalization
+    double dc_gain = bessel_dc_gain(poles);
+
+    // Process poles: complex pairs and real poles
+    for (size_t i = 0; i < poles.size(); ++i) {
+        auto pole = poles[i];
+
+        if (std::abs(pole.imag()) < 1e-10) {
+            // Real pole: first-order section
+            // Analog: H(s) = |pole| / (s - pole) = |pole| / (s + |pole|)
+            // Bilinear: s = 2*(z-1)/(z+1)
+            double p = -pole.real();  // Make positive for stability
+            double K = 2.0 + p;
+            double b0 = p / K;
+            double b1 = p / K;
+            double a1 = (p - 2.0) / K;
+
+            cascade_fos(coeffs, b0, b1, 1.0, a1);
+            ++i;  // Skip conjugate (already real)
+        } else {
+            // Complex conjugate pair: second-order section
+            // Analog: H(s) = wc^2 / (s^2 - 2*sigma*s + |pole|^2)
+            auto pole_conj = std::conj(pole);
+            double sigma = pole.real();
+            double omega = pole.imag();
+            double pole_mag_sq = std::norm(pole);
+
+            // Numerator gain: pole magnitude squared
+            double wc2 = pole_mag_sq;
+
+            // Denominator: s^2 - 2*sigma*s + pole_mag_sq
+            double a1_s = -2.0 * sigma;
+            double a2_s = pole_mag_sq;
+
+            // Bilinear transform: s = 2*(z-1)/(z+1)
+            // After simplification:
+            double K = 4.0 - 2.0 * a1_s + a2_s;
+            double b0 = wc2 / K;
+            double b1 = 2.0 * wc2 / K;
+            double b2 = wc2 / K;
+            double a1 = (2.0 * a2_s - 8.0) / K;
+            double a2 = (4.0 + 2.0 * a1_s + a2_s) / K;
+
+            cascade_sos(coeffs, b0, b1, b2, 1.0, a1, a2);
+
+            // Skip the conjugate pole (already processed)
+            if (i + 1 < poles.size() && std::abs(poles[i+1] - pole_conj) < 1e-10) {
+                ++i;
+            }
+        }
+    }
+
+    // Apply DC gain correction
+    double gain_correction = 1.0 / dc_gain;
+    for (auto& b : coeffs.b) {
+        b *= static_cast<float>(gain_correction);
+    }
+
     return coeffs;
+}
+
+// Bessel highpass using lowpass-to-highpass transformation
+FilterCoefficients bessel_highpass(int order, double wc) {
+    FilterCoefficients coeffs;
+    coeffs.b = {1.0f};
+    coeffs.a = {1.0f};
+
+    // Get normalized Bessel poles
+    auto poles = bessel_poles(order);
+
+    // Lowpass-to-highpass transformation: s -> wc^2/s
+    // New poles: p_hp = wc^2 / p_lp
+    for (auto& pole : poles) {
+        pole = (wc * wc) / pole;
+    }
+
+    // Get gain (highpass has gain at Nyquist = 1)
+    double nyq_gain = bessel_dc_gain(poles);
+
+    // Process poles similar to lowpass
+    for (size_t i = 0; i < poles.size(); ++i) {
+        auto pole = poles[i];
+
+        if (std::abs(pole.imag()) < 1e-10) {
+            // Real pole
+            double p = -pole.real();
+            double K = 2.0 + p;
+            double b0 = 2.0 / K;
+            double b1 = -2.0 / K;
+            double a1 = (p - 2.0) / K;
+
+            cascade_fos(coeffs, b0, b1, 1.0, a1);
+            ++i;
+        } else {
+            // Complex pair
+            auto pole_conj = std::conj(pole);
+            double sigma = pole.real();
+            double omega = pole.imag();
+            double pole_mag_sq = std::norm(pole);
+
+            double a1_s = -2.0 * sigma;
+            double a2_s = pole_mag_sq;
+
+            double K = 4.0 - 2.0 * a1_s + a2_s;
+            double b0 = 4.0 / K;
+            double b1 = -8.0 / K;
+            double b2 = 4.0 / K;
+            double a1 = (2.0 * a2_s - 8.0) / K;
+            double a2 = (4.0 + 2.0 * a1_s + a2_s) / K;
+
+            cascade_sos(coeffs, b0, b1, b2, 1.0, a1, a2);
+
+            if (i + 1 < poles.size() && std::abs(poles[i+1] - pole_conj) < 1e-10) {
+                ++i;
+            }
+        }
+    }
+
+    // Apply Nyquist gain correction for highpass
+    double gain_correction = 1.0 / nyq_gain;
+    for (auto& b : coeffs.b) {
+        b *= static_cast<float>(gain_correction);
+    }
+
+    return coeffs;
+}
+
+// Bessel bandpass using cascaded highpass + lowpass
+FilterCoefficients bessel_bandpass(int order, double wc_low, double wc_high) {
+    // Design as cascade of HP (wc_low) and LP (wc_high)
+    auto hp = bessel_highpass(order, wc_low);
+    auto lp = bessel_lowpass(order, wc_high);
+
+    // Cascade the two filters
+    FilterCoefficients result;
+    result.b.resize(hp.b.size() + lp.b.size() - 1, 0.0f);
+    result.a.resize(hp.a.size() + lp.a.size() - 1, 0.0f);
+
+    // Convolve numerator
+    for (size_t i = 0; i < hp.b.size(); ++i) {
+        for (size_t j = 0; j < lp.b.size(); ++j) {
+            result.b[i + j] += hp.b[i] * lp.b[j];
+        }
+    }
+
+    // Convolve denominator
+    for (size_t i = 0; i < hp.a.size(); ++i) {
+        for (size_t j = 0; j < lp.a.size(); ++j) {
+            result.a[i + j] += hp.a[i] * lp.a[j];
+        }
+    }
+
+    return result;
+}
+
+// Bessel bandstop using complementary bandpass
+FilterCoefficients bessel_bandstop(int order, double wc_low, double wc_high) {
+    // Bandstop = All-pass - Bandpass
+    // For IIR: H_bs(z) = 1 - H_bp(z) = (a - b) / a
+
+    auto bp = bessel_bandpass(order, wc_low, wc_high);
+
+    FilterCoefficients result;
+    result.b.resize(bp.a.size(), 0.0f);
+    result.a = bp.a;
+
+    // Numerator: a - b (complementary response)
+    for (size_t i = 0; i < bp.a.size(); ++i) {
+        result.b[i] += bp.a[i];
+    }
+    for (size_t i = 0; i < bp.b.size(); ++i) {
+        result.b[i] -= bp.b[i];
+    }
+
+    return result;
+}
+
+// Main Bessel filter function (single frequency)
+FilterCoefficients bessel(int order, float normalized_freq, FilterType type) {
+    FilterCoefficients coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || normalized_freq <= 0.0f || normalized_freq >= 1.0f) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    // Frequency prewarping for bilinear transform
+    double wc = 2.0 * std::tan(constants::pi * normalized_freq / 2.0);
+
+    if (type == FilterType::Lowpass) {
+        return bessel_lowpass(order, wc);
+    } else if (type == FilterType::Highpass) {
+        return bessel_highpass(order, wc);
+    } else {
+        // Bandpass/Bandstop require dual-frequency version
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+}
+
+// Bessel filter (dual frequency for bandpass/bandstop)
+FilterCoefficients bessel(int order, float low_freq, float high_freq, FilterType type) {
+    FilterCoefficients coeffs;
+
+    // Validate inputs
+    if (order < 1 || order > 10 || low_freq <= 0.0f || high_freq >= 1.0f || low_freq >= high_freq) {
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
+
+    // Frequency prewarping
+    double wc_low = 2.0 * std::tan(constants::pi * low_freq / 2.0);
+    double wc_high = 2.0 * std::tan(constants::pi * high_freq / 2.0);
+
+    if (type == FilterType::Bandpass) {
+        return bessel_bandpass(order, wc_low, wc_high);
+    } else if (type == FilterType::Bandstop) {
+        return bessel_bandstop(order, wc_low, wc_high);
+    } else {
+        // Single-frequency types not supported with dual-frequency call
+        coeffs.b = {1.0f};
+        coeffs.a = {1.0f};
+        return coeffs;
+    }
 }
 
 std::vector<float> fir_windowed_sinc(int num_taps, float normalized_freq,

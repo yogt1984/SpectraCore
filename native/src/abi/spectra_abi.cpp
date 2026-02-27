@@ -322,6 +322,28 @@ SPECTRA_API int spectra_ellip_bp(int order, float passband_ripple_db, float stop
     return 0;
 }
 
+SPECTRA_API int spectra_bessel(int order, float normalized_freq, SpectraFilterType type,
+                                float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::bessel(order, normalized_freq, static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
+SPECTRA_API int spectra_bessel_bp(int order, float low_freq, float high_freq,
+                                   SpectraFilterType type,
+                                   float* b, int* b_len, float* a, int* a_len) {
+    auto coeffs = spectra::bessel(order, low_freq, high_freq,
+                                   static_cast<spectra::FilterType>(type));
+    *b_len = static_cast<int>(coeffs.b.size());
+    *a_len = static_cast<int>(coeffs.a.size());
+    std::memcpy(b, coeffs.b.data(), coeffs.b.size() * sizeof(float));
+    std::memcpy(a, coeffs.a.data(), coeffs.a.size() * sizeof(float));
+    return 0;
+}
+
 // Filter application
 SPECTRA_API int spectra_lfilter(const float* b, int b_len,
                                  const float* a, int a_len,
