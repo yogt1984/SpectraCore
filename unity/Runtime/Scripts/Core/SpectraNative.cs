@@ -8,7 +8,13 @@ namespace Spectra
     /// </summary>
     internal static class SpectraNative
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // WebGL uses special "__Internal" library name for native plugins
+        private const string LibraryName = "__Internal";
+#else
+        // Other platforms (Windows, Linux, macOS, iOS, Android) use native library
         private const string LibraryName = "spectra";
+#endif
 
         // ====================================================================
         // Version

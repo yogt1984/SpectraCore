@@ -1,12 +1,12 @@
 #!/bin/bash
-# Setup Unity .meta files for mobile native plugins
+# Setup Unity .meta files for native plugins (mobile & web)
 # Run this after building the native libraries
 
 set -e
 
 PLUGINS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Setting up Unity .meta files for mobile plugins..."
+echo "Setting up Unity .meta files for native plugins..."
 echo "Plugins directory: $PLUGINS_DIR"
 echo ""
 
@@ -72,6 +72,38 @@ if [ -f "$ANDROID_X64_LIB" ]; then
     fi
 else
     echo "⊘ Android x86_64 library not found (skip)"
+fi
+
+# WebGL WASM
+WEBGL_WASM="$PLUGINS_DIR/WebGL/libspectra.wasm"
+WEBGL_WASM_META_TEMPLATE="$PLUGINS_DIR/WebGL/libspectra.wasm.meta.template"
+WEBGL_WASM_META="$PLUGINS_DIR/WebGL/libspectra.wasm.meta"
+
+if [ -f "$WEBGL_WASM" ]; then
+    if [ -f "$WEBGL_WASM_META_TEMPLATE" ]; then
+        cp "$WEBGL_WASM_META_TEMPLATE" "$WEBGL_WASM_META"
+        echo "✓ Created WebGL WASM meta file"
+    else
+        echo "⚠ WebGL WASM template not found"
+    fi
+else
+    echo "⊘ WebGL WASM library not found (skip)"
+fi
+
+# WebGL JS
+WEBGL_JS="$PLUGINS_DIR/WebGL/libspectra.js"
+WEBGL_JS_META_TEMPLATE="$PLUGINS_DIR/WebGL/libspectra.js.meta.template"
+WEBGL_JS_META="$PLUGINS_DIR/WebGL/libspectra.js.meta"
+
+if [ -f "$WEBGL_JS" ]; then
+    if [ -f "$WEBGL_JS_META_TEMPLATE" ]; then
+        cp "$WEBGL_JS_META_TEMPLATE" "$WEBGL_JS_META"
+        echo "✓ Created WebGL JS meta file"
+    else
+        echo "⚠ WebGL JS template not found"
+    fi
+else
+    echo "⊘ WebGL JS library not found (skip)"
 fi
 
 echo ""
