@@ -2,11 +2,11 @@
 
 **Professional-grade DSP library for Unity with comprehensive C# bindings and editor tools**
 
-[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/yogt1984/SpectraCore/releases)
+[![Release](https://img.shields.io/badge/release-v1.2.0-blue.svg)](https://github.com/yogt1984/SpectraCore/releases)
 [![CI/CD](https://github.com/yogt1984/SpectraCore/workflows/CI/badge.svg)](https://github.com/yogt1984/SpectraCore/actions)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Unity](https://img.shields.io/badge/unity-2021.3+-orange.svg)](https://unity.com)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-lightgrey.svg)](#platform-support)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20iOS%20%7C%20Android%20%7C%20WebGL-lightgrey.svg)](#platform-support)
 
 ---
 
@@ -28,9 +28,12 @@ SpectraCore is a high-performance, cross-platform digital signal processing (DSP
 ### 🚀 Core Capabilities
 
 - **Real-time FFT & STFT** - Fast Fourier Transform with configurable sizes (256-8192)
-- **Professional Filter Design** - Butterworth, Chebyshev I/II, Elliptic with lowpass/highpass/bandpass/bandstop ⭐ NEW
+- **Professional Filter Design** - Butterworth, Chebyshev I/II, Elliptic, **Bessel** ⭐ NEW in v1.2.0
+  - All 4 filter types: Lowpass, Highpass, Bandpass, Bandstop
+  - Bessel filters: Maximally flat group delay for best transient response
 - **Signal Analysis** - Correlation, PSD, Hilbert transform, onset detection
 - **Streaming Processing** - Lock-free, zero-allocation audio pipeline
+- **Cross-Platform** - Desktop (Win/Mac/Linux), Mobile (iOS/Android), WebGL ⭐ NEW in v1.2.0
 - **Unity Integration** - Native plugins with managed C# wrappers
 
 ### 🛠️ Editor Tools
@@ -173,13 +176,14 @@ filter.Process(audioChunk);
 
 ## 💻 Platform Support
 
-| Platform | Status | Architecture | Compiler |
-|----------|--------|--------------|----------|
-| **Linux** | ✅ Complete | x86_64 | GCC 11+ |
-| **Windows** | ✅ Complete | x64 | MSVC 2022 |
-| **macOS** | ✅ Complete | Universal (x86_64 + arm64) | Clang |
-| **iOS** | 🔄 Planned | arm64 | Xcode |
-| **Android** | 🔄 Planned | arm64-v8a, armeabi-v7a | NDK |
+| Platform | Status | Architecture | Compiler | Notes |
+|----------|--------|--------------|----------|-------|
+| **Linux** | ✅ Complete | x86_64 | GCC 11+ | Desktop |
+| **Windows** | ✅ Complete | x64 | MSVC 2022 | Desktop |
+| **macOS** | ✅ Complete | Universal (x86_64 + arm64) | Clang | Desktop |
+| **iOS** | ✅ Complete ⭐ NEW | arm64, armv7 | Xcode | Mobile |
+| **Android** | ✅ Complete ⭐ NEW | arm64-v8a, armeabi-v7a, x86, x86_64 | NDK r21+ | Mobile |
+| **WebGL** | ✅ Complete ⭐ NEW | WebAssembly | Emscripten 3.1+ | Browser |
 
 ### Build Status
 
