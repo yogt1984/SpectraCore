@@ -1,6 +1,6 @@
 {
   "name": "com.spectracore.dsp",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "displayName": "SpectraCore DSP Library",
   "description": "High-performance Digital Signal Processing library for Unity with MATLAB-compatible APIs. Includes FFT, STFT, filter design (Butterworth, Chebyshev, Elliptic), spectral analysis, onset detection, and comprehensive editor tools.",
   "unity": "2021.3",

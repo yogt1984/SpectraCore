@@ -910,5 +910,269 @@ namespace Spectra.Tests
 
             Assert.Greater(avgMag, 0.3f, "FiltFilt bandpass should preserve signal");
         }
+
+        // ====================================================================
+        // Pitch Detection Tests
+        // ====================================================================
+
+        [Test]
+        public void PitchDetector_CreateAndDispose()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                Assert.AreEqual(44100, detector.SampleRate);
+                Assert.AreEqual(2048, detector.BufferSize);
+            }
+        }
+
+        [Test]
+        public void PitchDetector_DetectA440()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(440.0f, 2048, 44100);
+                var result = detector.Detect(buffer);
+
+                Assert.IsTrue(result.Voiced, "Should detect pitch");
+                Assert.That(result.Frequency, Is.EqualTo(440.0f).Within(5.0f), "Frequency should be ~440 Hz");
+                Assert.Greater(result.Confidence, 0.7f, "Confidence should be high");
+            }
+        }
+
+        [Test]
+        public void PitchDetector_DetectMiddleC()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(261.63f, 2048, 44100);
+                var result = detector.Detect(buffer);
+
+                Assert.IsTrue(result.Voiced);
+                Assert.That(result.Frequency, Is.EqualTo(261.63f).Within(5.0f));
+                Assert.Greater(result.Confidence, 0.7f);
+            }
+        }
+
+        [Test]
+        public void PitchDetector_DetectNote_A4()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(440.0f, 2048, 44100);
+                var note = detector.DetectNote(buffer);
+
+                Assert.AreEqual("A", note.Name);
+                Assert.AreEqual(4, note.Octave);
+                Assert.That(note.Cents, Is.EqualTo(0.0f).Within(20.0f), "Should be close to perfect tuning");
+            }
+        }
+
+        [Test]
+        public void PitchDetector_DetectNote_C4()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(261.63f, 2048, 44100);
+                var note = detector.DetectNote(buffer);
+
+                Assert.AreEqual("C", note.Name);
+                Assert.AreEqual(4, note.Octave);
+            }
+        }
+
+        [Test]
+        public void PitchDetector_DetectNote_FSharp4()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(369.99f, 2048, 44100);
+                var note = detector.DetectNote(buffer);
+
+                Assert.AreEqual("F#", note.Name);
+                Assert.AreEqual(4, note.Octave);
+            }
+        }
+
+        [Test]
+        public void PitchDetector_RejectSilence()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = new float[2048];
+                var result = detector.Detect(buffer);
+
+                Assert.IsFalse(result.Voiced, "Silence should not be detected as voiced");
+                Assert.Less(result.Confidence, 0.5f);
+            }
+        }
+
+        [Test]
+        public void PitchDetector_Autocorrelation_Method()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(440.0f, 2048, 44100);
+                var result = detector.Detect(buffer, PitchMethod.Autocorrelation);
+
+                Assert.IsTrue(result.Voiced);
+                Assert.That(result.Frequency, Is.EqualTo(440.0f).Within(10.0f));
+            }
+        }
+
+        [Test]
+        public void PitchDetector_Auto_Method()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(440.0f, 2048, 44100);
+                var result = detector.Detect(buffer, PitchMethod.Auto);
+
+                Assert.IsTrue(result.Voiced);
+                Assert.Greater(result.Frequency, 0.0f);
+            }
+        }
+
+        [Test]
+        public void PitchDetector_SetThreshold()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                detector.SetThreshold(0.05f);
+                detector.SetThreshold(0.2f);
+                // Should not throw
+                Assert.Pass();
+            }
+        }
+
+        [Test]
+        public void PitchDetector_SetMinConfidence()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                detector.SetMinConfidence(0.3f);
+                detector.SetMinConfidence(0.9f);
+                // Should not throw
+                Assert.Pass();
+            }
+        }
+
+        [Test]
+        public void PitchDetector_FrequencyToNote_A440()
+        {
+            var note = PitchDetector.FrequencyToNote(440.0f);
+
+            Assert.AreEqual("A", note.Name);
+            Assert.AreEqual(4, note.Octave);
+            Assert.That(note.Cents, Is.EqualTo(0.0f).Within(1.0f));
+        }
+
+        [Test]
+        public void PitchDetector_FrequencyToNote_C4()
+        {
+            var note = PitchDetector.FrequencyToNote(261.63f);
+
+            Assert.AreEqual("C", note.Name);
+            Assert.AreEqual(4, note.Octave);
+        }
+
+        [Test]
+        public void PitchDetector_NoteToFrequency_A4()
+        {
+            float freq = PitchDetector.NoteToFrequency("A", 4);
+            Assert.That(freq, Is.EqualTo(440.0f).Within(0.1f));
+        }
+
+        [Test]
+        public void PitchDetector_NoteToFrequency_C4()
+        {
+            float freq = PitchDetector.NoteToFrequency("C", 4);
+            Assert.That(freq, Is.EqualTo(261.63f).Within(0.5f));
+        }
+
+        [Test]
+        public void PitchDetector_NoteToFrequency_FSharp4()
+        {
+            float freq = PitchDetector.NoteToFrequency("F#", 4);
+            Assert.That(freq, Is.EqualTo(369.99f).Within(0.5f));
+        }
+
+        [Test]
+        public void PitchDetector_RoundTrip_FrequencyNoteFrequency()
+        {
+            float originalFreq = 440.0f;
+            var note = PitchDetector.FrequencyToNote(originalFreq);
+            float convertedFreq = PitchDetector.NoteToFrequency(note.Name, note.Octave);
+
+            Assert.That(convertedFreq, Is.EqualTo(originalFreq).Within(1.0f));
+        }
+
+        [Test]
+        public void PitchDetector_AlternativeTuning_A432()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                float[] buffer = GenerateSineWave(432.0f, 2048, 44100);
+                var note = detector.DetectNote(buffer, 432.0f);
+
+                Assert.AreEqual("A", note.Name);
+                Assert.AreEqual(4, note.Octave);
+                Assert.That(note.Cents, Is.EqualTo(0.0f).Within(20.0f));
+            }
+        }
+
+        [Test]
+        public void PitchDetector_EdgeCase_NullBuffer()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                Assert.Throws<ArgumentNullException>(() => detector.Detect(null));
+            }
+        }
+
+        [Test]
+        public void PitchDetector_EdgeCase_EmptyBuffer()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                var result = detector.Detect(new float[0]);
+                // Should handle gracefully
+                Assert.IsFalse(result.Voiced);
+            }
+        }
+
+        [Test]
+        public void PitchDetector_MultipleDetections()
+        {
+            using (var detector = new PitchDetector(44100, 2048))
+            {
+                // Detect multiple different pitches in sequence
+                float[] buffer440 = GenerateSineWave(440.0f, 2048, 44100);
+                var result440 = detector.Detect(buffer440);
+
+                float[] buffer262 = GenerateSineWave(261.63f, 2048, 44100);
+                var result262 = detector.Detect(buffer262);
+
+                float[] buffer330 = GenerateSineWave(329.63f, 2048, 44100);
+                var result330 = detector.Detect(buffer330);
+
+                Assert.That(result440.Frequency, Is.EqualTo(440.0f).Within(5.0f));
+                Assert.That(result262.Frequency, Is.EqualTo(261.63f).Within(5.0f));
+                Assert.That(result330.Frequency, Is.EqualTo(329.63f).Within(5.0f));
+            }
+        }
+
+        // Helper method to generate sine wave
+        private float[] GenerateSineWave(float frequency, int numSamples, float sampleRate)
+        {
+            float[] buffer = new float[numSamples];
+            float angularFreq = 2.0f * (float)Math.PI * frequency / sampleRate;
+
+            for (int i = 0; i < numSamples; i++)
+            {
+                buffer[i] = (float)Math.Sin(angularFreq * i);
+            }
+
+            return buffer;
+        }
     }
 }

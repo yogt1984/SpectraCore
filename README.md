@@ -2,7 +2,7 @@
 
 **Professional-grade DSP library for Unity with comprehensive C# bindings and editor tools**
 
-[![Release](https://img.shields.io/badge/release-v1.2.0-blue.svg)](https://github.com/yogt1984/SpectraCore/releases)
+[![Release](https://img.shields.io/badge/release-v1.3.0-blue.svg)](https://github.com/yogt1984/SpectraCore/releases)
 [![CI/CD](https://github.com/yogt1984/SpectraCore/workflows/CI/badge.svg)](https://github.com/yogt1984/SpectraCore/actions)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Unity](https://img.shields.io/badge/unity-2021.3+-orange.svg)](https://unity.com)
@@ -31,9 +31,12 @@ SpectraCore is a high-performance, cross-platform digital signal processing (DSP
 - **Professional Filter Design** - Butterworth, Chebyshev I/II, Elliptic, **Bessel** ⭐ NEW in v1.2.0
   - All 4 filter types: Lowpass, Highpass, Bandpass, Bandstop
   - Bessel filters: Maximally flat group delay for best transient response
-- **Signal Analysis** - Correlation, PSD, Hilbert transform, onset detection
+- **Signal Analysis** - Correlation, PSD, Hilbert transform, onset detection, **Pitch Detection** ⭐ NEW in v1.3.0
+  - YIN algorithm for accurate pitch tracking
+  - Musical note mapping with cents deviation
+  - Real-time tuner-grade performance
 - **Streaming Processing** - Lock-free, zero-allocation audio pipeline
-- **Cross-Platform** - Desktop (Win/Mac/Linux), Mobile (iOS/Android), WebGL ⭐ NEW in v1.2.0
+- **Cross-Platform** - Desktop (Win/Mac/Linux), Mobile (iOS/Android), WebGL
 - **Unity Integration** - Native plugins with managed C# wrappers
 
 ### 🛠️ Editor Tools
@@ -113,6 +116,32 @@ using var filter = new StreamingIIRFilter(b, a);
 filter.Process(audioChunk);
 ```
 
+### Pitch Detection Example ⭐ NEW
+
+```csharp
+using Spectra;
+
+// Create pitch detector (44.1 kHz, 2048 samples)
+using (var detector = new PitchDetector(44100, 2048))
+{
+    // Get audio from microphone or AudioSource
+    float[] audioBuffer = GetAudioBuffer();
+
+    // Detect pitch
+    var result = detector.Detect(audioBuffer);
+
+    if (result.Voiced)
+    {
+        Debug.Log($"Frequency: {result.Frequency:F1} Hz");
+        Debug.Log($"Confidence: {result.Confidence:F2}");
+
+        // Get musical note
+        var note = PitchDetector.FrequencyToNote(result.Frequency);
+        Debug.Log($"Note: {note.Name}{note.Octave} ({note.Cents:+0.0;-0.0} cents)");
+    }
+}
+```
+
 ---
 
 ## 📚 API Reference
@@ -143,6 +172,7 @@ filter.Process(audioChunk);
 | `STFTAnalyzer` | Short-Time Fourier Transform (batch + streaming) |
 | `StreamingIIRFilter` | Real-time filtering with state preservation |
 | `OnsetDetector` | Beat/transient detection with callbacks |
+| `PitchDetector` | Real-time pitch detection with YIN algorithm ⭐ NEW |
 | `AudioPipeline` | Microphone input and AudioSource processing |
 
 ---

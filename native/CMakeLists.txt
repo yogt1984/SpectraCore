@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(spectra VERSION 1.0.0 LANGUAGES CXX C)
+project(spectra VERSION 1.3.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,7 @@ set(SPECTRA_SOURCES
     src/analysis/hilbert.cpp
     src/analysis/resample.cpp
     src/analysis/onset_detection.cpp
+    src/analysis/pitch_detection.cpp
     src/abi/spectra_abi.cpp
 )
 

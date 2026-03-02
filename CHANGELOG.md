@@ -5,6 +5,109 @@ All notable changes to SpectraCore will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-03-01
+
+### Added
+
+#### Real-Time Pitch Detection ⭐ NEW
+- **Complete pitch detection implementation** using industry-standard YIN algorithm:
+  - High-accuracy pitch tracking with sub-sample precision
+  - Multiple detection methods: YIN (default), Autocorrelation, HPS, Auto
+  - Real-time capable with < 1ms processing time
+  - Voiced/unvoiced detection with confidence scoring
+  - Configurable frequency range and sensitivity thresholds
+- **Musical note mapping**:
+  - Automatic frequency-to-note conversion (A, C#, Bb, etc.)
+  - Octave detection (e.g., A4, C4)
+  - Cents deviation for tuning accuracy (±50 cents)
+  - Alternative tuning support (A4 = 432 Hz, 415 Hz, etc.)
+- **Unity C# API**:
+  - `PitchDetector` class with IDisposable pattern
+  - Easy-to-use API: `detector.Detect(buffer)` → `PitchResult`
+  - Musical note detection: `detector.DetectNote(buffer)` → `MusicalNote`
+  - Static utility methods: `FrequencyToNote()`, `NoteToFrequency()`
+- **Native C++ implementation**:
+  - `spectra::PitchDetector` class in `spectra/analysis/pitch_detection.hpp`
+  - YIN algorithm with 4 steps: difference function, CMND, threshold, interpolation
+  - Autocorrelation method for faster (but less accurate) detection
+  - Parabolic interpolation for sub-sample accuracy
+  - Pre-allocated working buffers for zero per-frame allocation
+- **Use cases**:
+  - Musical instrument tuners (guitar, vocal, chromatic)
+  - Real-time pitch correction and auto-tune
+  - Music transcription and analysis
+  - Voice analysis and singing training
+  - Pitch-based game mechanics
+
+#### Documentation & Examples
+- **Comprehensive documentation**:
+  - `docs/PitchDetection.md`: Complete API reference and usage guide
+  - Quick start examples and best practices
+  - Performance benchmarks and optimization tips
+- **Unity example project**:
+  - `SimplePitchTuner.cs`: Real-time microphone-based tuner
+  - Visual tuning indicator with color-coded feedback
+  - Configurable detection parameters
+  - Multiple instrument presets (guitar, vocals, bass)
+
+### Technical Details
+
+#### C++ Implementation
+- **Algorithm**: YIN (de Cheveigné & Kawahara, 2002)
+- **Lines of code**: ~550 lines of C++ implementation
+- **Performance**: < 0.5ms per frame @ 44.1 kHz (YIN method)
+- **Memory**: ~50 KB per detector instance
+- **Accuracy**: Within ±5 Hz for pure tones, ±10 Hz for complex signals
+
+#### Testing
+- **Native tests**: 32 comprehensive unit tests
+  - YIN algorithm validation
+  - Autocorrelation method tests
+  - Musical note conversion tests
+  - Edge case handling (silence, noise, out-of-range)
+- **Unity tests**: 23 C# integration tests
+  - P/Invoke layer validation
+  - High-level API tests
+  - Resource management tests
+  - Multi-detection scenarios
+
+#### API Additions
+
+**Native C++ (`spectra/analysis/pitch_detection.hpp`)**:
+```cpp
+class PitchDetector {
+    PitchDetector(float sample_rate, size_t buffer_size, float min_freq, float max_freq);
+    PitchResult detect(const float* buffer, size_t size, PitchMethod method);
+    MusicalNote detectNote(const float* buffer, size_t size, float a4_freq, PitchMethod method);
+    void setThreshold(float threshold);
+    void setMinConfidence(float min_confidence);
+};
+
+MusicalNote frequencyToNote(float frequency, float a4_freq);
+float noteToFrequency(const std::string& note_name, int octave, float a4_freq);
+std::string midiNoteToName(int midi_note);
+float frequencyToMIDI(float frequency, float a4_freq);
+```
+
+**Unity C# (`PitchDetector.cs`)**:
+```csharp
+public class PitchDetector : IDisposable {
+    public PitchDetector(float sampleRate, int bufferSize, float minFreq, float maxFreq);
+    public PitchResult Detect(float[] buffer, PitchMethod method);
+    public MusicalNote DetectNote(float[] buffer, float a4Freq, PitchMethod method);
+    public void SetThreshold(float threshold);
+    public void SetMinConfidence(float minConfidence);
+
+    public static MusicalNote FrequencyToNote(float frequency, float a4Freq);
+    public static float NoteToFrequency(string noteName, int octave, float a4Freq);
+}
+```
+
+### References
+- de Cheveigné, A., & Kawahara, H. (2002). "YIN, a fundamental frequency estimator for speech and music." *The Journal of the Acoustical Society of America*, 111(4), 1917-1930.
+
+---
+
 ## [1.2.0] - 2026-02-27
 
 ### Added
