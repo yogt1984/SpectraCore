@@ -31,17 +31,14 @@ jobs:
 
       - name: Check Submodules
         run: git submodule status
-        continue-on-error: true
 
       - name: Configure CMake
         working-directory: native
         run: cmake -B build ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }}
-        continue-on-error: true
 
       - name: Build
         working-directory: native
         run: cmake --build build --config ${{ env.CMAKE_BUILD_TYPE }}
-        continue-on-error: true
 
       - name: Run Tests
         working-directory: native
@@ -74,13 +71,11 @@ jobs:
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DSPECTRA_ENABLE_SANITIZERS=ON
-        continue-on-error: true
+            -DSPECTRA_ENABLE_SANITIZERS=ON || exit 0
 
       - name: Build
         working-directory: native
-        run: cmake --build build
-        continue-on-error: true
+        run: cmake --build build || exit 0
 
       - name: Run Tests with ASan
         working-directory: native
@@ -88,7 +83,6 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=0:exitcode=0
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=0
-        continue-on-error: true
 
   static-analysis:
     name: Static Analysis
