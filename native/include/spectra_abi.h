@@ -285,6 +285,62 @@ SPECTRA_API int spectra_onset_process(SpectraOnsetDetector detector,
                                        SpectraOnsetCallback callback, void* user_data);
 SPECTRA_API int spectra_onset_reset(SpectraOnsetDetector detector);
 
+/* ============================================================================
+ * Pitch Detection
+ * ============================================================================ */
+
+typedef void* SpectraPitchDetector;
+
+typedef struct {
+    float frequency;      // Detected frequency in Hz (0 if no pitch detected)
+    float confidence;     // Confidence score (0.0 to 1.0)
+    int voiced;           // 1 if signal is voiced (has clear pitch), 0 otherwise
+    float clarity;        // Pitch clarity metric (0.0 to 1.0)
+} SpectraPitchResult;
+
+typedef struct {
+    char name[8];         // Note name (e.g., "A", "C#", "Bb")
+    int octave;           // Octave number (e.g., 4 for middle C = C4)
+    float cents;          // Deviation in cents (-50 to +50, 0 = perfectly in tune)
+    float frequency;      // Exact frequency in Hz
+} SpectraMusicalNote;
+
+typedef enum {
+    SPECTRA_PITCH_YIN = 0,              // YIN algorithm (most accurate, default)
+    SPECTRA_PITCH_AUTOCORRELATION = 1,  // Autocorrelation method
+    SPECTRA_PITCH_HPS = 2,              // Harmonic Product Spectrum
+    SPECTRA_PITCH_AUTO = 3              // Automatically choose best method
+} SpectraPitchMethod;
+
+SPECTRA_API SpectraPitchDetector spectra_pitch_create(
+    float sample_rate,
+    int buffer_size,
+    float min_freq,
+    float max_freq);
+
+SPECTRA_API void spectra_pitch_destroy(SpectraPitchDetector detector);
+
+SPECTRA_API int spectra_pitch_detect(
+    SpectraPitchDetector detector,
+    const float* buffer,
+    int size,
+    SpectraPitchMethod method,
+    SpectraPitchResult* result);
+
+SPECTRA_API int spectra_pitch_detect_note(
+    SpectraPitchDetector detector,
+    const float* buffer,
+    int size,
+    float a4_freq,
+    SpectraPitchMethod method,
+    SpectraMusicalNote* note);
+
+SPECTRA_API void spectra_pitch_set_threshold(SpectraPitchDetector detector, float threshold);
+SPECTRA_API void spectra_pitch_set_min_confidence(SpectraPitchDetector detector, float min_confidence);
+
+SPECTRA_API int spectra_frequency_to_note(float frequency, float a4_freq, SpectraMusicalNote* note);
+SPECTRA_API float spectra_note_to_frequency(const char* note_name, int octave, float a4_freq);
+
 #ifdef __cplusplus
 }
 #endif

@@ -417,5 +417,85 @@ namespace Spectra
             public float threshold;
             public float minIntervalMs;
         }
+
+        // ====================================================================
+        // Pitch Detection
+        // ====================================================================
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct PitchResult
+        {
+            public float frequency;
+            public float confidence;
+            public int voiced;
+            public float clarity;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+        public struct MusicalNote
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 8)]
+            public string name;
+            public int octave;
+            public float cents;
+            public float frequency;
+        }
+
+        public enum PitchMethod
+        {
+            YIN = 0,
+            Autocorrelation = 1,
+            HPS = 2,
+            Auto = 3
+        }
+
+        [DllImport(LibraryName)]
+        public static extern IntPtr spectra_pitch_create(
+            float sampleRate,
+            int bufferSize,
+            float minFreq,
+            float maxFreq);
+
+        [DllImport(LibraryName)]
+        public static extern void spectra_pitch_destroy(IntPtr detector);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_pitch_detect(
+            IntPtr detector,
+            [In] float[] buffer,
+            int size,
+            PitchMethod method,
+            out PitchResult result);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_pitch_detect_note(
+            IntPtr detector,
+            [In] float[] buffer,
+            int size,
+            float a4Freq,
+            PitchMethod method,
+            out MusicalNote note);
+
+        [DllImport(LibraryName)]
+        public static extern void spectra_pitch_set_threshold(
+            IntPtr detector,
+            float threshold);
+
+        [DllImport(LibraryName)]
+        public static extern void spectra_pitch_set_min_confidence(
+            IntPtr detector,
+            float minConfidence);
+
+        [DllImport(LibraryName)]
+        public static extern int spectra_frequency_to_note(
+            float frequency,
+            float a4Freq,
+            out MusicalNote note);
+
+        [DllImport(LibraryName)]
+        public static extern float spectra_note_to_frequency(
+            [MarshalAs(UnmanagedType.LPStr)] string noteName,
+            int octave,
+            float a4Freq);
     }
 }

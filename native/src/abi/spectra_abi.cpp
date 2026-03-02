@@ -6,6 +6,7 @@
 #include "spectra_abi.h"
 #include "spectra/spectra.hpp"
 #include <cstring>
+#include <string>
 
 // Thread-local error state
 thread_local SpectraError g_last_error = SPECTRA_OK;
@@ -18,10 +19,10 @@ static void set_error(SpectraError error, const char* message) {
 }
 
 // Version
-SPECTRA_API int spectra_version_major(void) { return 0; }
-SPECTRA_API int spectra_version_minor(void) { return 1; }
+SPECTRA_API int spectra_version_major(void) { return 1; }
+SPECTRA_API int spectra_version_minor(void) { return 3; }
 SPECTRA_API int spectra_version_patch(void) { return 0; }
-SPECTRA_API const char* spectra_version_string(void) { return "0.1.0"; }
+SPECTRA_API const char* spectra_version_string(void) { return "1.3.0"; }
 
 // Error handling
 SPECTRA_API SpectraError spectra_get_last_error(void) { return g_last_error; }
@@ -502,4 +503,154 @@ SPECTRA_API int spectra_onset_reset(SpectraOnsetDetector detector) {
     }
     static_cast<spectra::OnsetDetector*>(detector)->reset();
     return 0;
+}
+
+// ============================================================================
+// Pitch Detection
+// ============================================================================
+
+SPECTRA_API SpectraPitchDetector spectra_pitch_create(
+    float sample_rate,
+    int buffer_size,
+    float min_freq,
+    float max_freq)
+{
+    try {
+        auto* detector = new spectra::PitchDetector(
+            sample_rate,
+            static_cast<size_t>(buffer_size),
+            min_freq,
+            max_freq
+        );
+        spectra_clear_error();
+        return detector;
+    } catch (const std::exception& e) {
+        set_error(SPECTRA_ERROR_ALLOCATION_FAILED, e.what());
+        return nullptr;
+    }
+}
+
+SPECTRA_API void spectra_pitch_destroy(SpectraPitchDetector detector) {
+    delete static_cast<spectra::PitchDetector*>(detector);
+}
+
+SPECTRA_API int spectra_pitch_detect(
+    SpectraPitchDetector detector,
+    const float* buffer,
+    int size,
+    SpectraPitchMethod method,
+    SpectraPitchResult* result)
+{
+    if (!detector || !buffer || !result) {
+        set_error(SPECTRA_ERROR_INVALID_ARGUMENT, "Null pointer in pitch_detect");
+        return -1;
+    }
+
+    try {
+        auto* d = static_cast<spectra::PitchDetector*>(detector);
+        auto cpp_method = static_cast<spectra::PitchMethod>(method);
+
+        spectra::PitchResult cpp_result = d->detect(buffer, static_cast<size_t>(size), cpp_method);
+
+        // Convert to C struct
+        result->frequency = cpp_result.frequency;
+        result->confidence = cpp_result.confidence;
+        result->voiced = cpp_result.voiced ? 1 : 0;
+        result->clarity = cpp_result.clarity;
+
+        spectra_clear_error();
+        return 0;
+    } catch (const std::exception& e) {
+        set_error(SPECTRA_ERROR_INVALID_STATE, e.what());
+        return -1;
+    }
+}
+
+SPECTRA_API int spectra_pitch_detect_note(
+    SpectraPitchDetector detector,
+    const float* buffer,
+    int size,
+    float a4_freq,
+    SpectraPitchMethod method,
+    SpectraMusicalNote* note)
+{
+    if (!detector || !buffer || !note) {
+        set_error(SPECTRA_ERROR_INVALID_ARGUMENT, "Null pointer in pitch_detect_note");
+        return -1;
+    }
+
+    try {
+        auto* d = static_cast<spectra::PitchDetector*>(detector);
+        auto cpp_method = static_cast<spectra::PitchMethod>(method);
+
+        spectra::MusicalNote cpp_note = d->detectNote(
+            buffer,
+            static_cast<size_t>(size),
+            a4_freq,
+            cpp_method
+        );
+
+        // Convert to C struct
+        std::strncpy(note->name, cpp_note.name.c_str(), sizeof(note->name) - 1);
+        note->name[sizeof(note->name) - 1] = '\0';
+        note->octave = cpp_note.octave;
+        note->cents = cpp_note.cents;
+        note->frequency = cpp_note.frequency;
+
+        spectra_clear_error();
+        return 0;
+    } catch (const std::exception& e) {
+        set_error(SPECTRA_ERROR_INVALID_STATE, e.what());
+        return -1;
+    }
+}
+
+SPECTRA_API void spectra_pitch_set_threshold(SpectraPitchDetector detector, float threshold) {
+    if (detector) {
+        static_cast<spectra::PitchDetector*>(detector)->setThreshold(threshold);
+    }
+}
+
+SPECTRA_API void spectra_pitch_set_min_confidence(SpectraPitchDetector detector, float min_confidence) {
+    if (detector) {
+        static_cast<spectra::PitchDetector*>(detector)->setMinConfidence(min_confidence);
+    }
+}
+
+SPECTRA_API int spectra_frequency_to_note(float frequency, float a4_freq, SpectraMusicalNote* note) {
+    if (!note) {
+        set_error(SPECTRA_ERROR_INVALID_ARGUMENT, "Null pointer for note");
+        return -1;
+    }
+
+    try {
+        spectra::MusicalNote cpp_note = spectra::frequencyToNote(frequency, a4_freq);
+
+        std::strncpy(note->name, cpp_note.name.c_str(), sizeof(note->name) - 1);
+        note->name[sizeof(note->name) - 1] = '\0';
+        note->octave = cpp_note.octave;
+        note->cents = cpp_note.cents;
+        note->frequency = cpp_note.frequency;
+
+        spectra_clear_error();
+        return 0;
+    } catch (const std::exception& e) {
+        set_error(SPECTRA_ERROR_INVALID_STATE, e.what());
+        return -1;
+    }
+}
+
+SPECTRA_API float spectra_note_to_frequency(const char* note_name, int octave, float a4_freq) {
+    if (!note_name) {
+        set_error(SPECTRA_ERROR_INVALID_ARGUMENT, "Null pointer for note_name");
+        return 0.0f;
+    }
+
+    try {
+        spectra_clear_error();
+        return spectra::noteToFrequency(std::string(note_name), octave, a4_freq);
+    } catch (const std::exception& e) {
+        set_error(SPECTRA_ERROR_INVALID_STATE, e.what());
+        return 0.0f;
+    }
 }

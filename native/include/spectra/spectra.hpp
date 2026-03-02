@@ -27,5 +27,6 @@
 #include "analysis/hilbert.hpp"
 #include "analysis/resample.hpp"
 #include "analysis/onset_detection.hpp"
+#include "analysis/pitch_detection.hpp"
 
 #endif // SPECTRA_HPP
