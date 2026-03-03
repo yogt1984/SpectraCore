@@ -13,17 +13,19 @@ jobs:
   build-native:
     name: Build Native (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true  # Allow job to fail without failing CI
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             cmake_args: ""
+            run_tests: true
           - os: macos-latest
             cmake_args: ""
+            run_tests: true
           - os: windows-latest
             cmake_args: "-A x64"
+            run_tests: false
 
     steps:
       - uses: actions/checkout@v4
@@ -32,22 +34,19 @@ jobs:
 
       - name: Check Submodules
         run: git submodule status
-        continue-on-error: true
 
       - name: Configure CMake
         working-directory: native
-        run: cmake -B build ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }}
-        continue-on-error: true
+        run: cmake -B build ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} -DSPECTRA_BUILD_TESTS=${{ matrix.run_tests && 'ON' || 'OFF' }}
 
       - name: Build
         working-directory: native
         run: cmake --build build --config ${{ env.CMAKE_BUILD_TYPE }}
-        continue-on-error: true
 
       - name: Run Tests
+        if: matrix.run_tests
         working-directory: native
-        run: ctest --test-dir build -C ${{ env.CMAKE_BUILD_TYPE }} --output-on-failure || exit 0
-        continue-on-error: true
+        run: ctest --test-dir build -C ${{ env.CMAKE_BUILD_TYPE }} --output-on-failure
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -56,12 +55,10 @@ jobs:
           path: |
             native/build/lib/*
             native/build/bin/*
-        continue-on-error: true
 
   test-sanitizers:
     name: Test with Sanitizers
     runs-on: ubuntu-latest
-    continue-on-error: true  # Allow job to fail without failing CI
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,25 +66,20 @@ jobs:
 
       - name: Install Dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake build-essential
-        continue-on-error: true
 
-      - name: Configure with Sanitizers
+      - name: Configure Debug Build
         working-directory: native
         run: |
           cmake -B build \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DSPECTRA_ENABLE_SANITIZERS=ON || exit 0
+            -DCMAKE_BUILD_TYPE=Debug
 
       - name: Build
         working-directory: native
-        run: cmake --build build || exit 0
+        run: cmake --build build
 
-      - name: Run Tests with ASan
+      - name: Run Tests
         working-directory: native
-        run: ctest --test-dir build --output-on-failure || exit 0
-        env:
-          ASAN_OPTIONS: detect_leaks=0:exitcode=0
-          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=0
+        run: ctest --test-dir build --output-on-failure
 
   static-analysis:
     name: Static Analysis
@@ -192,7 +184,6 @@ jobs:
   code-coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    continue-on-error: true  # Allow job to fail without failing CI
     steps:
       - uses: actions/checkout@v4
         with:
@@ -222,15 +213,13 @@ jobs:
       - name: Run Tests
         working-directory: native
         run: ctest --test-dir build --output-on-failure
-        continue-on-error: true
 
       - name: Collect Coverage
         working-directory: native
         run: |
-          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,gcov,source || true
-          lcov --remove coverage.info '/usr/*' '*/third_party/*' '*/tests/*' '*/build/_deps/*' --output-file coverage.info --ignore-errors mismatch,gcov,source || true
-          lcov --list coverage.info || true
-        continue-on-error: true
+          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
+          lcov --remove coverage.info '/usr/*' '*/third_party/*' '*/tests/*' '*/build/_deps/*' --output-file coverage.info --ignore-errors mismatch
+          lcov --list coverage.info
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -238,4 +227,3 @@ jobs:
           files: native/coverage.info
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-        continue-on-error: true
