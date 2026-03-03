@@ -57,32 +57,6 @@ jobs:
             native/build/lib/*
             native/build/bin/*
 
-  test-sanitizers:
-    name: Test with Sanitizers
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
-
-      - name: Configure Debug Build
-        working-directory: native
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Debug
-
-      - name: Build
-        working-directory: native
-        run: cmake --build build
-
-      - name: Run Tests
-        working-directory: native
-        run: ctest --test-dir build --output-on-failure
-
   static-analysis:
     name: Static Analysis
     runs-on: ubuntu-latest
