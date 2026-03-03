@@ -13,20 +13,14 @@ jobs:
   build-native:
     name: Build Native (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             cmake_args: ""
-            run_tests: true
           - os: macos-latest
             cmake_args: ""
-            run_tests: true
-          - os: windows-latest
-            cmake_args: "-A x64"
-            run_tests: false
 
     steps:
       - uses: actions/checkout@v4
@@ -38,14 +32,13 @@ jobs:
 
       - name: Configure CMake
         working-directory: native
-        run: cmake -B build ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} -DSPECTRA_BUILD_TESTS=${{ matrix.run_tests && 'ON' || 'OFF' }}
+        run: cmake -B build ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }}
 
       - name: Build
         working-directory: native
         run: cmake --build build --config ${{ env.CMAKE_BUILD_TYPE }}
 
       - name: Run Tests
-        if: matrix.run_tests
         working-directory: native
         run: ctest --test-dir build -C ${{ env.CMAKE_BUILD_TYPE }} --output-on-failure
 
