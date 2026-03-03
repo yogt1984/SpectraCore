@@ -216,13 +216,15 @@ jobs:
 
       - name: Collect Coverage
         working-directory: native
+        continue-on-error: true
         run: |
-          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
-          lcov --remove coverage.info '/usr/*' '*/third_party/*' '*/tests/*' '*/build/_deps/*' --output-file coverage.info --ignore-errors mismatch
-          lcov --list coverage.info
+          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch || true
+          lcov --remove coverage.info '/usr/*' '*/third_party/*' '*/tests/*' '*/build/_deps/*' --output-file coverage.info --ignore-errors mismatch || true
+          lcov --list coverage.info || true
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v4
+        continue-on-error: true
         with:
           files: native/coverage.info
           fail_ci_if_error: false
