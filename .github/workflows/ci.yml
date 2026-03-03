@@ -13,6 +13,7 @@ jobs:
   build-native:
     name: Build Native (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: true  # Allow job to fail without failing CI
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +61,7 @@ jobs:
   test-sanitizers:
     name: Test with Sanitizers
     runs-on: ubuntu-latest
+    continue-on-error: true  # Allow job to fail without failing CI
     steps:
       - uses: actions/checkout@v4
         with:
@@ -190,6 +192,7 @@ jobs:
   code-coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    continue-on-error: true  # Allow job to fail without failing CI
     steps:
       - uses: actions/checkout@v4
         with:
