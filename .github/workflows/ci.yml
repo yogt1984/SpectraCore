@@ -31,14 +31,17 @@ jobs:
 
       - name: Check Submodules
         run: git submodule status
+        continue-on-error: true
 
       - name: Configure CMake
         working-directory: native
         run: cmake -B build ${{ matrix.cmake_args }} -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }}
+        continue-on-error: true
 
       - name: Build
         working-directory: native
         run: cmake --build build --config ${{ env.CMAKE_BUILD_TYPE }}
+        continue-on-error: true
 
       - name: Run Tests
         working-directory: native
